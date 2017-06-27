@@ -27,8 +27,7 @@ if use_cython:
     Extension("taggd.io.barcode_utils",                  ["taggd/io/barcode_utils.pyx"]),
     Extension("taggd.io.record",                         ["taggd/io/record.pyx"]),
     Extension("taggd.io.sam_record",                     ["taggd/io/sam_record.pyx"]),
-    Extension("taggd.io.fasta_record",                   ["taggd/io/fasta_record.pyx"]),
-    Extension("taggd.io.fastq_record",                   ["taggd/io/fastq_record.pyx"]),
+    Extension("taggd.io.fastaq_record",                   ["taggd/io/fastaq_record.pyx"]),
     Extension("taggd.io.reads_reader_writer",            ["taggd/io/reads_reader_writer.pyx"])
     ]
     cmdclass.update({ 'build_ext': build_ext })
@@ -46,8 +45,7 @@ else:
     Extension("taggd.io.barcode_utils",                  ["taggd/io/barcode_utils.c"]),
     Extension("taggd.io.record",                         ["taggd/io/record.c"]),
     Extension("taggd.io.sam_record",                     ["taggd/io/sam_record.c"]),
-    Extension("taggd.io.fasta_record",                   ["taggd/io/fasta_record.c"]),
-    Extension("taggd.io.fastq_record",                   ["taggd/io/fastq_record.c"]),
+    Extension("taggd.io.fastaq_record",                   ["taggd/io/fastaq_record.c"]),
     Extension("taggd.io.reads_reader_writer",            ["taggd/io/reads_reader_writer.c"])
     ]
 

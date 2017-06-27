@@ -8,8 +8,7 @@ import os
 from cpython cimport bool
 import taggd.io.fastq_utils as fu
 from taggd.io.sam_record import *
-from taggd.io.fasta_record import *
-from taggd.io.fastq_record import *
+from taggd.io.fastaq_record import *
 
 # Global variables for match types.
 cdef int FASTQ, FASTA, SAM, BAM
@@ -78,11 +77,11 @@ class ReadsReaderWriter():
 
         if self.file_type == FASTA:
             for orig in self.infile:
-                rec = FASTARecord(orig)
+                rec = FASTAQRecord(orig)
                 yield rec
         elif self.file_type == FASTQ:
             for orig in self.infile:
-                rec = FASTQRecord(orig)
+                rec = FASTAQRecord(orig)
                 yield rec
         else:
             for orig in self.infile:
