@@ -18,26 +18,27 @@ class FASTAQRecord(Record):
         self.annotation = fqr[0]
         self.sequence = fqr[1]
         if len(fqr) == 3: self.attributes["quality"] = fqr[2]
-        self.taggdtags = ""
+        self.attributes["taggdtags"] = None
 
     def add_tags(self, list added):
         """
-        Appends tags for extra information
+        Appends extra tags for taggd.
         :param added a list of tag tuples (name,value)
         """
-        cdef str k
-        cdef object v
-        self.taggdtags = ' '.join(["{}:{}".format(k,v) for k,v in added])
+        self.attributes["taggdtags"] = added
 
     def unwrap(self, force_fasta=False):
         """
         Returns (annotation, sequence) or (annotation, sequence, quality) if quality is available
         """
+        cdef str k
+        cdef object v
+        cdef str taggdtags_str = ' '.join(["{}:{}".format(k,v) for k,v in self.attributes["taggdtags"]]) if self.attributes["taggdtags"] else ""
         if "quality" in self.attributes and not force_fasta:
-            return ("{} {}".format(self.annotation, self.taggdtags), 
+            return ("{} {}".format(self.annotation, taggdtags_str), 
                     self.sequence, self.attributes["quality"])
         else:
-            return ("{} {}".format(self.annotation, self.taggdtags), self.sequence)
+            return ("{} {}".format(self.annotation, taggdtags_str), self.sequence)
 
     def __str__(self):
         """
