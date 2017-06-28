@@ -54,7 +54,7 @@ def main(argv=None):
                         type=str,
                         help="The format of the output files.\n" \
                         "FASTQ, FASTA, SAM, BAM or INFILE,\n" \
-                        "if set to INFILE the format of the input file will be used (default: %(default)d)",
+                        "if set to INFILE the format of the input file will be used (default: %(default)s)",
                         default="INFILE", metavar="[str]")
     parser.add_argument('--no-matched-output',
                          help='Do not output matched reads',
