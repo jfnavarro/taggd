@@ -50,6 +50,12 @@ def main(argv=None):
                         metavar='outfile-prefix', help="The output files prefix.")
 
     # Optional arguments.
+    parser.add_argument('--output-format',
+                        type=str,
+                        help="The format of the output files.\n" \
+                        "FASTQ, FASTA, SAM, BAM or INFILE,\n" \
+                        "if set to INFILE the format of the input file will be used (default: %(default)d)",
+                        default="INFILE", metavar="[str]")
     parser.add_argument('--no-matched-output',
                          help='Do not output matched reads',
                          default=False, action='store_true')
@@ -148,6 +154,15 @@ def main(argv=None):
                          "FASTA, SAM or BAM format and file end with .fq, fastq, .fa, .fasta, .sam or .bam")
     if options.outfile_prefix is None or options.outfile_prefix == "":
         raise ValueError("Invalid output file prefix.")
+
+    options.output_format = options.output_format.upper()
+    if not (options.output_format == "INFILE" or \
+            options.output_format == "FASTQ" or \
+            options.output_format == "SAM" or \
+            options.output_format == "FASTA" or \
+            options.output_format == "BAM"):
+        raise ValueError("Invalid output file format: must be INFILE, FASTQ, " \
+                         "FASTA, SAM or BAM format")    
     if options.k <= 0:
         raise ValueError("Invalid kmer length. Must be > 0.")
     if options.max_edit_distance < 0:
@@ -179,6 +194,11 @@ def main(argv=None):
 
     # Paths
     frmt = options.reads_infile.split(".")[-1]
+    if options.output_format != 'INFILE':
+        if options.output_format == "FASTQ":   frmt = 'fq'
+        elif options.output_format == "SAM":   frmt = 'sam'
+        elif options.output_format == "FASTA": frmt = 'fa'
+        elif options.output_format == "BAM":   frmt = 'bam'
     fn_bc = os.path.abspath(options.barcodes_infile)
     fn_reads = os.path.abspath(options.reads_infile)
     fn_prefix = os.path.abspath(options.outfile_prefix)
@@ -251,7 +271,8 @@ def main(argv=None):
                              fn_ambig,
                              fn_unmatched,
                              fn_results,
-                             options.subprocesses)
+                             options.subprocesses,
+                             options.output_format)
     print "# ...finished demultiplexing"
     print "# Wall time in secs: " + str(time.time() - start_time)
     print str(stats)

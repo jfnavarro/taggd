@@ -25,6 +25,7 @@ class ReadsReaderWriter():
         """
 
         self.file_type = -1
+        self.output_file_format = -1
         self.infile_name = reads_infile_name
         self.infile = None
         self.infile_header = None
@@ -55,6 +56,9 @@ class ReadsReaderWriter():
                                            check_header=True, check_sq=False)
             self.infile_header = self.infile.header
             self.infile.close()
+        elif self.file_type == FASTA or self.file_type == FASTQ:
+            self.infile_header = { 'HD': {'VN': '1', 'SO':'unsorted'} }
+            #self.infile_header = { 'HD': {'VN': '1', 'GO':'query'} }
 
     def reader_open(self):
         """
@@ -126,12 +130,22 @@ class ReadsReaderWriter():
         # Remove if exists
         if os.path.exists(outfile_name):
             os.remove(outfile_name)
+
+        # get the output file type
+        cdef str suffix = outfile_name.split(".")[-1]
+        if suffix == "fa":    self.output_file_format = FASTA
+        elif suffix == "fq":  self.output_file_format = FASTQ
+        elif suffix == "sam": self.output_file_format = SAM
+        elif suffix == "bam": self.output_file_format = BAM
+        else: raise ValueError("Unsupported output file format!")
+        if self.file_type == FASTA and self.output_file_format != FASTA: raise ValueError("Unsupported output file format!\n            No quality values present.\n            FASTA is the only output format allowed for FASTA input.")
+
         # Open the file and returns the handler
-        if self.file_type == FASTA or self.file_type == FASTQ:
+        if self.output_file_format == FASTA or self.output_file_format == FASTQ:
             return open(outfile_name, "w")
-        elif self.file_type == SAM:
+        elif self.output_file_format == SAM:
             return ps.AlignmentFile(outfile_name, "wh", header=self.infile_header)
-        elif self.file_type == BAM:
+        elif self.output_file_format == BAM:
             return ps.AlignmentFile(outfile_name, "wb", header=self.infile_header)
         else:
             raise ValueError("Unknown file format for writer")
@@ -145,13 +159,11 @@ class ReadsReaderWriter():
         :param record the Record object to write
         """
         #TODO record could not be the same type of the file handler(check this)
-        if self.file_type == FASTA:
-            fu.writefa_record(outfile, record.unwrap())
-        elif self.file_type == FASTQ:
-            fu.writefq_record(outfile, record.unwrap())
-        elif self.file_type == SAM:
-            outfile.write(record.unwrap())
-        elif self.file_type == BAM:
-            outfile.write(record.unwrap())
+        if self.output_file_format == FASTA:
+            fu.writefa_record(outfile, record.unwrap(output_format=self.output_file_format))
+        elif self.output_file_format == FASTQ:
+            fu.writefq_record(outfile, record.unwrap(output_format=self.output_file_format))
+        elif self.output_file_format == SAM or self.output_file_format == BAM:
+            outfile.write(record.unwrap(output_format=self.output_file_format))
         else:
             raise ValueError("Unknown file format for record")

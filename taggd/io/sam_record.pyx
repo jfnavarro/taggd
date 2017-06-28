@@ -6,6 +6,8 @@ written to a sam file
 import pysam
 from taggd.io.record import Record
 
+FASTQ, FASTA, SAM, BAM = range(4)
+
 class SAMRecord(Record):
     """
     Holds a SAM record.
@@ -18,6 +20,8 @@ class SAMRecord(Record):
         Represents a pysam.AlignedSequence as a Record.
         """
         Record.__init__(self)
+        assert isinstance(alseq, pysam.AlignedSegment), 'ERROR: this is not a pysam.AlignedSegment'
+        self.input_format = SAM
         self.annotation = str(alseq.query_name)
         self.sequence = str(alseq.query_sequence)
         self.attributes["flag"] = alseq.flag
@@ -39,23 +43,46 @@ class SAMRecord(Record):
         """
         self.attributes["taggdtags"] = added
 
-    def unwrap(self):
+    @property
+    def taggdtags_str(self):
+        cdef str k
+        cdef object v
+        cdef str taggdtags_str = ' '.join(["{}:{}".format(k,v) for k,v in self.attributes["taggdtags"]]) if self.attributes["taggdtags"] else ""
+        return taggdtags_str
+
+    def unwrap(self, output_format=None):
         """
         Returns a pysam alignment.
         """
         cdef object a = pysam.AlignedSegment()
-        a.query_name = self.annotation
-        a.flag = self.attributes["flag"]
-        a.reference_id = self.attributes["reference_id"]
-        a.reference_start = self.attributes["reference_start"]
-        a.mapping_quality = self.attributes["mapping_quality"]
-        a.cigar = self.attributes["cigar"]
-        a.next_reference_id = self.attributes["reference_id"]
-        a.next_reference_start = self.attributes["reference_start"]
-        a.template_length = self.attributes["template_length"]
-        a.query_sequence = self.sequence
-        a.query_qualities = self.attributes["query_qualities"]
-        a.tags = self.attributes["tags"]
-        if self.attributes["taggdtags"] != None:
-                a.tags += self.attributes["taggdtags"]
-        return a
+        if output_format in [None, SAM, BAM]:
+            a.query_name = self.annotation
+            a.flag = self.attributes["flag"]
+            a.reference_id = self.attributes["reference_id"]
+            a.reference_start = self.attributes["reference_start"]
+            a.mapping_quality = self.attributes["mapping_quality"]
+            a.cigar = self.attributes["cigar"]
+            a.next_reference_id = self.attributes["reference_id"]
+            a.next_reference_start = self.attributes["reference_start"]
+            a.template_length = self.attributes["template_length"]
+            a.query_sequence = self.sequence
+            a.query_qualities = self.attributes["query_qualities"]
+            a.tags = self.attributes["tags"]
+            if self.attributes["taggdtags"] != None:
+                    a.tags += self.attributes["taggdtags"]
+            return a
+        elif output_format == FASTQ: return self.unwrap_fastq()
+        elif output_format == FASTA: return self.unwrap_fasta()
+
+    
+    def unwrap_fasta(self):
+        """
+        Returns a (annotation, sequence) tuple
+        """
+        return ("{} {}".format(self.annotation, self.taggdtags_str), self.sequence)
+        
+    def unwrap_fastq(self):
+        """
+        Returns a (annotation, sequence, quality) tuple
+        """
+        return ("{} {}".format(self.annotation, self.taggdtags_str), self.sequence, self.attributes["query_qualities"])
