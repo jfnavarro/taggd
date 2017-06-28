@@ -7,8 +7,7 @@ import sys
 import os
 from cpython cimport bool
 import taggd.io.fastq_utils as fu
-from taggd.io.sam_record import *
-from taggd.io.fastaq_record import *
+from taggd.io.record import *
 
 # Global variables for match types.
 cdef int FASTQ, FASTA, SAM, BAM
@@ -77,20 +76,11 @@ class ReadsReaderWriter():
         else:
             raise ValueError("Unsupported reads file format!")
 
-        cdef object rec, last
+        cdef object rec
 
-        if self.file_type == FASTA:
-            for orig in self.infile:
-                rec = FASTAQRecord(orig)
-                yield rec
-        elif self.file_type == FASTQ:
-            for orig in self.infile:
-                rec = FASTAQRecord(orig)
-                yield rec
-        else:
-            for orig in self.infile:
-                rec = SAMRecord(orig)
-                yield rec
+        for orig in self.infile:
+            rec = Record(orig)
+            yield rec
 
     def reader_close(self):
         """
