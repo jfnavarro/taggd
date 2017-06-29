@@ -117,7 +117,7 @@ class Record(object):
         if self.input_format == FASTQPE:
             return (
                     ("{} {}".format(self.annotation, self.taggdtags_str), self.sequence),
-                    ("{} {}".format(self.self.attributes["second_read_annotation"], self.taggdtags_str), self.attributes["second_read_sequence"])
+                    ("{} {}".format(self.attributes["second_read_annotation"], self.taggdtags_str), self.attributes["second_read_sequence"])
                    )
         else:
             return (("{} {}".format(self.annotation, self.taggdtags_str), self.sequence), )
