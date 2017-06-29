@@ -4,7 +4,7 @@ a FASTA or FASTQ record or pysam.AlignedSegment
 """
 import pysam
 
-FASTQ, FASTA, SAM, BAM = range(4)
+FASTQ, FASTA, SAM, BAM, FASTQPE = range(5)
 
 class Record(object):
     """
@@ -21,7 +21,9 @@ class Record(object):
         self.attributes = dict()
         
         if isinstance(req, tuple):
-            if len(req) == 2: self._init_fasta(req)
+            if len(req) == 2:
+                if   isinstance(req[0], str):   self._init_fasta(req)
+                elif isinstance(req[0], tuple): self._init_paired_fastq(req)
             elif len(req) == 3: self._init_fastq(req)
 
         elif isinstance(req, pysam.AlignedSegment):
@@ -46,6 +48,18 @@ class Record(object):
         self._init_fasta(req)
         self.input_format = FASTQ
         self.attributes["query_qualities"] = req[2]
+
+    def _init_paired_fastq(self, req):
+        """
+        Format specific Constructor.
+        Represents a ((annotation, seq, qual),(annotation, seq, qual)) nested tuple as record.
+        """
+        self._init_fastq( req[0] )
+        self.input_format = FASTQPE
+        self.attributes["second_read_annotation"]      = req[1][0]
+        self.attributes["second_read_sequence"]        = req[1][1]
+        self.attributes["second_read_query_qualities"] = req[1][2]
+        assert self.annotation.split(' ')[0] == self.attributes["second_read_annotation"].split(' ')[0], "ERROR: order of fastq headers don't match in paired infiles!\n\tINFO: "+self.annotation.split(' ')[0]+" != "+self.attributes["second_read_annotation"].split(' ')[0]+"\n"
 
     def _init_sam(self, req):
         """
@@ -100,19 +114,32 @@ class Record(object):
         """
         Returns a (annotation, sequence) tuple
         """
-        return ("{} {}".format(self.annotation, self.taggdtags_str), self.sequence)
+        if self.input_format == FASTQPE:
+            return (
+                    ("{} {}".format(self.annotation, self.taggdtags_str), self.sequence),
+                    ("{} {}".format(self.self.attributes["second_read_annotation"], self.taggdtags_str), self.attributes["second_read_sequence"])
+                   )
+        else:
+            return (("{} {}".format(self.annotation, self.taggdtags_str), self.sequence), )
         
     def unwrap_fastq(self):
         """
         Returns a (annotation, sequence, quality) tuple
         """
-        return ("{} {}".format(self.annotation, self.taggdtags_str), self.sequence, self.attributes["query_qualities"])
+        if self.input_format == FASTQPE:
+            return (
+                    ("{} {}".format(self.annotation, self.taggdtags_str), self.sequence, self.attributes["query_qualities"]),
+                    ("{} {}".format(self.attributes["second_read_annotation"], self.taggdtags_str), self.attributes["second_read_sequence"], self.attributes["second_read_query_qualities"] )
+                   )
+        else:
+            return (("{} {}".format(self.annotation, self.taggdtags_str), self.sequence, self.attributes["query_qualities"]), )
     
     def unwrap_sam(self):
         """
         Returns a pysam.AlignedSegment.
         """
         cdef object a = pysam.AlignedSegment()
+        cdef object b = pysam.AlignedSegment() # only used if input format is FASTQPE
         a.query_name = self.annotation
         a.query_sequence = self.sequence
 
@@ -130,7 +157,14 @@ class Record(object):
         if self.attributes["taggdtags"] != None:
                 a.tags += self.attributes["taggdtags"]
         
-        return a
+        if self.input_format == FASTQPE:
+            b.query_name      = self.attributes["second_read_annotation"]
+            b.query_sequence  = self.attributes["second_read_sequence"]
+            b.query_qualities = self.attributes["second_read_query_qualities"]
+            if self.attributes["taggdtags"] != None: b.tags += self.attributes["taggdtags"]
+            return (a,b)
+        else:
+            return (a, )
 
     def __str__(self):
         """

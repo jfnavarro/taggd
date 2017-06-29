@@ -77,6 +77,7 @@ def init(dict true_barcodes_,
             barcode_length += (end - start)
    
 def demultiplex_lines_wrapper(str filename_reads,
+                              str second_fastq_filename,
                               str filename_matched,
                               str filename_ambig,
                               str filename_unmatched,
@@ -88,6 +89,7 @@ def demultiplex_lines_wrapper(str filename_reads,
     Demultiplexes every ln_mod line, starting at ln_offset, writing to specified files.
     """
     return demultiplex_lines(filename_reads,
+                            second_fastq_filename,
                             filename_matched,
                             filename_ambig,
                             filename_unmatched,
@@ -96,6 +98,7 @@ def demultiplex_lines_wrapper(str filename_reads,
                             ln_mod)
 
 cdef object demultiplex_lines(str filename_reads,
+                              str second_fastq_filename,
                               str filename_matched,
                               str filename_ambig,
                               str filename_unmatched,
@@ -115,6 +118,7 @@ cdef object demultiplex_lines(str filename_reads,
     # TODO check they are not open already
     cdef bool header = (ln_offset == 0)
     cdef object re_wr = rw.ReadsReaderWriter(filename_reads)
+    if second_fastq_filename: re_wr.set_second_fastq_filename(second_fastq_filename)
     re_wr.reader_open()
     cdef object f_match = re_wr.get_writer(filename_matched) if filename_matched else None 
     cdef object f_ambig = re_wr.get_writer(filename_ambig) if filename_ambig else None

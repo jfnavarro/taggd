@@ -28,6 +28,7 @@ class ReadsReaderWriter():
         self.infile_name = reads_infile_name
         self.infile = None
         self.infile_header = None
+        self.second_fastq_filename = None
 
         # Supported file types
         global FASTQ
@@ -59,6 +60,10 @@ class ReadsReaderWriter():
             self.infile_header = { 'HD': {'VN': '1', 'SO':'unsorted'} }
             #self.infile_header = { 'HD': {'VN': '1', 'GO':'query'} }
 
+    def set_second_fastq_filename(self, second_fastq_filename):
+        assert self.file_type == FASTQ, 'ERROR: paried infiles are only allowed when using FASTQ format.'
+        self.second_fastq_filename = second_fastq_filename
+        
     def reader_open(self):
         """
         Opens the reads file using appropriate format.
@@ -68,7 +73,16 @@ class ReadsReaderWriter():
         
         # Open file.
         if self.file_type == FASTA or self.file_type == FASTQ:
-            self.infile = fu.readfq(open(self.infile_name, "r"))
+            if self.second_fastq_filename and self.file_type == FASTQ:
+                import itertools
+                self._infile_1 = open(self.infile_name, "r")
+                self._infile_2 = open(self.second_fastq_filename, "r")
+                self.infile = itertools.izip_longest(
+                        fu.readfq(self._infile_1),
+                        fu.readfq(self._infile_2)
+                    )
+            else:
+                self.infile = fu.readfq(open(self.infile_name, "r"))
         elif self.file_type == SAM:
             self.infile = ps.AlignmentFile(self.infile_name, "r", check_header=True, check_sq=False)
         elif self.file_type == BAM:
@@ -86,9 +100,14 @@ class ReadsReaderWriter():
         """
         Closes the input file handler.
         """
+        import itertools
         if self.infile != None:
-            self.infile.close()
-            self.infile = None
+            if isinstance( self.infile, itertools.izip_longest ):
+                self._infile_1.close()
+                self._infile_2.close()
+            else:
+                self.infile.close()
+                self.infile = None
 
     def __exit__(self, type, value, tb):
         """
@@ -109,7 +128,6 @@ class ReadsReaderWriter():
         if self.file_type == BAM:
             return "bam"
         return None
-
 
     def get_writer(self, str outfile_name):
         """
@@ -144,16 +162,13 @@ class ReadsReaderWriter():
         """
         Writes a record in the filename descriptor given.
         Important out_handler must be a descriptor opened (using get_writer())
-        Record's type should be the same as the one this instance was created from
         :param out_handler the outpuf file handler
         :param record the Record object to write
         """
         #TODO record could not be the same type of the file handler(check this)
-        if self.output_file_format == FASTA:
-            fu.writefa_record(outfile, record.unwrap(output_format=self.output_file_format))
-        elif self.output_file_format == FASTQ:
-            fu.writefq_record(outfile, record.unwrap(output_format=self.output_file_format))
-        elif self.output_file_format == SAM or self.output_file_format == BAM:
-            outfile.write(record.unwrap(output_format=self.output_file_format))
-        else:
-            raise ValueError("Unknown file format for record")
+        for read in record.unwrap(output_format=self.output_file_format):
+            if   self.output_file_format == FASTA: fu.writefa_record(outfile, read)
+            elif self.output_file_format == FASTQ: fu.writefq_record(outfile, read)
+            elif self.output_file_format in [SAM, BAM]: outfile.write(read)
+            else:
+                raise ValueError("Unknown file format for record")

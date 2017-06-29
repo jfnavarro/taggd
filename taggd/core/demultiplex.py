@@ -50,6 +50,14 @@ def main(argv=None):
                         metavar='outfile-prefix', help="The output files prefix.")
 
     # Optional arguments.
+    parser.add_argument('--second-fastq',
+                        type=str,
+                        help="Filename of the second read fastq file if working with paired data.\n" \
+                        "Using this option is only possible when working with FASTQ input format.\n" \
+                        "The second read will be tagged with the same taggd-tags as in the first read.\n" \
+                        "The second read will be printed to the same outfile just follwing the first read.\n" \
+                        "No other changes will be made to the second read.",
+                        default=None, metavar="[second_reads_infile.fastq]")
     parser.add_argument('--output-format',
                         type=str,
                         help="The format of the output files.\n" \
@@ -154,6 +162,13 @@ def main(argv=None):
                          "FASTA, SAM or BAM format and file end with .fq, fastq, .fa, .fasta, .sam or .bam")
     if options.outfile_prefix is None or options.outfile_prefix == "":
         raise ValueError("Invalid output file prefix.")
+
+    if options.second_fastq and \
+    not (options.reads_infile.upper().endswith(".FASTQ") or \
+         options.reads_infile.upper().endswith(".FQ")    ):
+        raise ValueError("The reads input file format must be FASTQ when the --second-fastq option is used.")
+    if options.second_fastq and not os.path.isfile(options.reads_infile) :
+        raise ValueError("Invalid second_reads_infile input path.")
 
     options.output_format = options.output_format.upper()
     if not (options.output_format == "INFILE" or \
@@ -272,7 +287,8 @@ def main(argv=None):
                              fn_unmatched,
                              fn_results,
                              options.subprocesses,
-                             options.output_format)
+                             options.output_format,
+                             options.second_fastq)
     print "# ...finished demultiplexing"
     print "# Wall time in secs: " + str(time.time() - start_time)
     print str(stats)
