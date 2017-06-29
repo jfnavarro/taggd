@@ -167,7 +167,7 @@ def main(argv=None):
     not (options.reads_infile.upper().endswith(".FASTQ") or \
          options.reads_infile.upper().endswith(".FQ")    ):
         raise ValueError("The reads input file format must be FASTQ when the --second-fastq option is used.")
-    if options.second_fastq and not os.path.isfile(options.reads_infile) :
+    if options.second_fastq and not os.path.isfile(options.second_fastq):
         raise ValueError("Invalid second_reads_infile input path.")
 
     options.output_format = options.output_format.upper()
