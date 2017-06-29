@@ -23,7 +23,8 @@ def demultiplex(str filename_reads,
                 str filename_results,
                 int subprocesses,
                 str output_format,
-                str second_fastq_filename):
+                str second_fastq_filename,
+                tuple umi_coordinates):
     """
     Demultiplexes the contents of a reads file by dividing the work into
     parallel subprocesses, each writing its own file, then
@@ -69,7 +70,7 @@ def demultiplex(str filename_reads,
                                             os.path.join(os.sep, os.path.basename(filename_results)), 
                                             i, uuid.uuid4(), 'tsv')
             fn_res.append(fr)
-        job = pool.apply_async(sub.demultiplex_lines_wrapper, (filename_reads, second_fastq_filename, fm, fa, fu, fr, i, subprocesses,))
+        job = pool.apply_async(sub.demultiplex_lines_wrapper, (filename_reads, second_fastq_filename, fm, fa, fu, fr, i, subprocesses, umi_coordinates))
         jobs.append(job)
 
     # Collect results from the workers through the pool result queue.

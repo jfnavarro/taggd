@@ -139,6 +139,21 @@ def main(argv=None):
                         "The bases given in the list of tuples as START END START END .. where\n" \
                         "START is the integer position of the first base (0 based) and END is the integer\n" \
                         "position of the last base.\nTrimmng sequences can be given several times.")
+    parser.add_argument('--umi-start-position',
+                        type=int,
+                        help='The start position for the umi sequence in reads (default: %(default)d).\n' \
+                             'Requires that the --umi-end-position option is also set.\n' \
+                             'If both --umi-start-position and --umi-end-position is set, the UMI sequenced will be saved as a taggd-tag.\n' \
+                             'Disabled if set to 0.\n',
+                        default=0, metavar="[int]")
+    parser.add_argument('--umi-end-position',
+                        type=int,
+                        help='The end position for the umi sequence in reads (default: %(default)d).\n' \
+                             'Requires that the --umi-start-position option is also set.\n' \
+                             'Requires that all reads are longer than the --umi-end-position value.\n' \
+                             'If both --umi-start-position and --umi-end-position is set, the UMI sequenced will be saved as a taggd-tag.\n' \
+                             'Disabled if set to 0.\n',
+                        default=0, metavar="[int]")
     parser.add_argument('--version', action='version', version='%(prog)s ' + "0.3.1")
 
     # Parse
@@ -203,7 +218,13 @@ def main(argv=None):
     and (len(options.trim_sequences) % 2 != 0 or min(options.trim_sequences)) < 0:
         raise ValueError("Invalid trimming sequences given " \
                          "The number of positions given must be even and they must fit into the barcode length.")
-        
+    if (options.umi_start_position < 0 or options.umi_end_position < 0):
+        raise ValueError("Invalid umi start and end positions. Must be >= 0.")
+    elif (options.umi_start_position != 0 or options.umi_end_position != 0):
+        if options.umi_start_position >= options.umi_end_position or 0 in [options.umi_start_position, options.umi_end_position]:
+            raise ValueError("Invalid umi start and end position. The --umi-start-position must be smaller than the --umi-end-position and both must be >=1 for the umi tagging to work.")
+    else: assert options.umi_start_position == options.umi_end_position and options.umi_start_position == 0, 'ERROR: unexpected behaviour due to current values of umi start and end positions.\n'
+
     # Read barcodes file
     true_barcodes = bu.read_barcode_file(options.barcodes_infile)
 
@@ -288,7 +309,8 @@ def main(argv=None):
                              fn_results,
                              options.subprocesses,
                              options.output_format,
-                             options.second_fastq)
+                             options.second_fastq,
+                             (options.umi_start_position, options.umi_end_position) )
     print "# ...finished demultiplexing"
     print "# Wall time in secs: " + str(time.time() - start_time)
     print str(stats)

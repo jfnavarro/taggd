@@ -87,6 +87,22 @@ class Record(object):
         """
         self.attributes["taggdtags"] = added
 
+    def get_umi_tag(self, tuple umi_coordinates):
+        """
+        Returns a tuple with a umi tag ("B3:Z",umi_sequence)
+        """
+        cdef int umi_start_position
+        cdef int umi_end_position
+        cdef str umi_sequence
+        cdef str name = "B3:Z"
+        
+        umi_start_position, umi_end_position = umi_coordinates
+        
+        if len(self.sequence) < umi_end_position: raise ValueError("Read length is shorter than the umi end position, try rerunning with other or no umi coordinates.")
+        else:
+            umi_sequence = self.sequence[umi_start_position:umi_end_position]
+            return (name,umi_sequence)
+
     @property
     def taggdtags_str(self):
         """
