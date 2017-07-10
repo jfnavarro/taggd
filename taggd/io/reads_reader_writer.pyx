@@ -142,11 +142,13 @@ class ReadsReaderWriter():
         # get the output file type
         cdef str suffix = outfile_name.split(".")[-1]
         if suffix == "fa":    self.output_file_format = FASTA
+        elif suffix == "fasta":    self.output_file_format = FASTA
         elif suffix == "fq":  self.output_file_format = FASTQ
+        elif suffix == "fastq":  self.output_file_format = FASTQ
         elif suffix == "sam": self.output_file_format = SAM
         elif suffix == "bam": self.output_file_format = BAM
-        else: raise ValueError("Unsupported output file format!")
-        if self.file_type == FASTA and self.output_file_format != FASTA: raise ValueError("Unsupported output file format!\n            No quality values present.\n            FASTA is the only output format allowed for FASTA input.")
+        else: raise ValueError("Unsupported output file format! SUFFIX="+suffix)
+        if self.file_type == FASTA and self.output_file_format != FASTA: raise ValueError("Unsupported output file format! SUFFIX="+suffix+"\n            No quality values present.\n            FASTA is the only output format allowed for FASTA input.")
 
         # Open the file and returns the handler
         if self.output_file_format == FASTA or self.output_file_format == FASTQ:
