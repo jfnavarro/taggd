@@ -77,31 +77,37 @@ def init(dict true_barcodes_,
             barcode_length += (end - start)
    
 def demultiplex_lines_wrapper(str filename_reads,
+                              str second_fastq_filename,
                               str filename_matched,
                               str filename_ambig,
                               str filename_unmatched,
                               str filename_res,
                               int ln_offset,
-                              int ln_mod):
+                              int ln_mod,
+                              tuple umi_coordinates):
     """
     Non cdef wrapper for cdef:ed subprocess function for demultiplexing parts of a file.
     Demultiplexes every ln_mod line, starting at ln_offset, writing to specified files.
     """
     return demultiplex_lines(filename_reads,
+                            second_fastq_filename,
                             filename_matched,
                             filename_ambig,
                             filename_unmatched,
                             filename_res,
                             ln_offset,
-                            ln_mod)
+                            ln_mod,
+                            umi_coordinates)
 
 cdef object demultiplex_lines(str filename_reads,
+                              str second_fastq_filename,
                               str filename_matched,
                               str filename_ambig,
                               str filename_unmatched,
                               str filename_res,
                               int ln_offset,
-                              int ln_mod):
+                              int ln_mod,
+                              tuple umi_coordinates):
     """
     Demultiplexes every ln_mod line, starting at ln_offset, writing to specified files.
     """
@@ -115,6 +121,7 @@ cdef object demultiplex_lines(str filename_reads,
     # TODO check they are not open already
     cdef bool header = (ln_offset == 0)
     cdef object re_wr = rw.ReadsReaderWriter(filename_reads)
+    if second_fastq_filename: re_wr.set_second_fastq_filename(second_fastq_filename)
     re_wr.reader_open()
     cdef object f_match = re_wr.get_writer(filename_matched) if filename_matched else None 
     cdef object f_ambig = re_wr.get_writer(filename_ambig) if filename_ambig else None
@@ -155,12 +162,18 @@ cdef object demultiplex_lines(str filename_reads,
                     stats.unmatched += 1
                     continue
 
-                # Append record with properties. B0:Z:Barcode, B1:Z:Prop1, B2:Z:prop3 ...
+                # Append record with properties. B0:Z:Barcode, B1:Z:Prop1, B2:Z:prop2, (B3:Z:prop3 or B3:Z:UMI), B4:Z:prop4 ... Bn:Z:propn
                 bc = true_barcodes[mt.barcode]
                 tags = list()
                 tags.append(("B0:Z", mt.barcode))
-                for j in xrange(len(bc.attributes)):
-                    tags.append(("B{}:Z".format(j+1), bc.attributes[j]))
+                tag_numbers = xrange(1,len(bc.attributes)+1)
+                if umi_coordinates != (0,0):
+                    tags.append( mt.record.get_umi_tag( umi_coordinates ) )
+                    if len(bc.attributes) >= 3:
+                        tag_numbers = [1,2]
+                        if len(bc.attributes) > 3: tag_numbers += range(4,len(bc.attributes)+1)
+                for j in tag_numbers:
+                    tags.append(("B{}:Z".format(j), bc.attributes[j-1]))
                 mt.record.add_tags(tags)
 
                 # Write to output file.

@@ -50,6 +50,20 @@ def main(argv=None):
                         metavar='outfile-prefix', help="The output files prefix.")
 
     # Optional arguments.
+    parser.add_argument('--second-fastq',
+                        type=str,
+                        help="Filename of the second read fastq file if working with paired data.\n" \
+                        "Using this option is only possible when working with FASTQ input format.\n" \
+                        "The second read will be tagged with the same taggd-tags as in the first read.\n" \
+                        "The second read will be printed to the same outfile just follwing the first read.\n" \
+                        "No other changes will be made to the second read.",
+                        default=None, metavar="[second_reads_infile.fastq]")
+    parser.add_argument('--output-format',
+                        type=str,
+                        help="The format of the output files.\n" \
+                        "FASTQ, FASTA, SAM, BAM or INFILE,\n" \
+                        "if set to INFILE the format of the input file will be used (default: %(default)s)",
+                        default="INFILE", metavar="[str]")
     parser.add_argument('--no-matched-output',
                          help='Do not output matched reads',
                          default=False, action='store_true')
@@ -125,6 +139,21 @@ def main(argv=None):
                         "The bases given in the list of tuples as START END START END .. where\n" \
                         "START is the integer position of the first base (0 based) and END is the integer\n" \
                         "position of the last base.\nTrimmng sequences can be given several times.")
+    parser.add_argument('--umi-start-position',
+                        type=int,
+                        help='The start position for the umi sequence in reads (default: %(default)d).\n' \
+                             'Requires that the --umi-end-position option is also set.\n' \
+                             'If both --umi-start-position and --umi-end-position is set, the UMI sequenced will be saved as a taggd-tag.\n' \
+                             'Disabled if set to 0.\n',
+                        default=0, metavar="[int]")
+    parser.add_argument('--umi-end-position',
+                        type=int,
+                        help='The end position for the umi sequence in reads (default: %(default)d).\n' \
+                             'Requires that the --umi-start-position option is also set.\n' \
+                             'Requires that all reads are longer than the --umi-end-position value.\n' \
+                             'If both --umi-start-position and --umi-end-position is set, the UMI sequenced will be saved as a taggd-tag.\n' \
+                             'Disabled if set to 0.\n',
+                        default=0, metavar="[int]")
     parser.add_argument('--version', action='version', version='%(prog)s ' + "0.3.1")
 
     # Parse
@@ -148,6 +177,22 @@ def main(argv=None):
                          "FASTA, SAM or BAM format and file end with .fq, fastq, .fa, .fasta, .sam or .bam")
     if options.outfile_prefix is None or options.outfile_prefix == "":
         raise ValueError("Invalid output file prefix.")
+
+    if options.second_fastq and \
+    not (options.reads_infile.upper().endswith(".FASTQ") or \
+         options.reads_infile.upper().endswith(".FQ")    ):
+        raise ValueError("The reads input file format must be FASTQ when the --second-fastq option is used.")
+    if options.second_fastq and not os.path.isfile(options.second_fastq):
+        raise ValueError("Invalid second_reads_infile input path.")
+
+    options.output_format = options.output_format.upper()
+    if not (options.output_format == "INFILE" or \
+            options.output_format == "FASTQ" or \
+            options.output_format == "SAM" or \
+            options.output_format == "FASTA" or \
+            options.output_format == "BAM"):
+        raise ValueError("Invalid output file format: must be INFILE, FASTQ, " \
+                         "FASTA, SAM or BAM format")    
     if options.k <= 0:
         raise ValueError("Invalid kmer length. Must be > 0.")
     if options.max_edit_distance < 0:
@@ -173,12 +218,23 @@ def main(argv=None):
     and (len(options.trim_sequences) % 2 != 0 or min(options.trim_sequences)) < 0:
         raise ValueError("Invalid trimming sequences given " \
                          "The number of positions given must be even and they must fit into the barcode length.")
-        
+    if (options.umi_start_position < 0 or options.umi_end_position < 0):
+        raise ValueError("Invalid umi start and end positions. Must be >= 0.")
+    elif (options.umi_start_position != 0 or options.umi_end_position != 0):
+        if options.umi_start_position >= options.umi_end_position or 0 in [options.umi_start_position, options.umi_end_position]:
+            raise ValueError("Invalid umi start and end position. The --umi-start-position must be smaller than the --umi-end-position and both must be >=1 for the umi tagging to work.")
+    else: assert options.umi_start_position == options.umi_end_position and options.umi_start_position == 0, 'ERROR: unexpected behaviour due to current values of umi start and end positions.\n'
+
     # Read barcodes file
     true_barcodes = bu.read_barcode_file(options.barcodes_infile)
 
     # Paths
     frmt = options.reads_infile.split(".")[-1]
+    if options.output_format != 'INFILE':
+        if options.output_format == "FASTQ":   frmt = 'fq'
+        elif options.output_format == "SAM":   frmt = 'sam'
+        elif options.output_format == "FASTA": frmt = 'fa'
+        elif options.output_format == "BAM":   frmt = 'bam'
     fn_bc = os.path.abspath(options.barcodes_infile)
     fn_reads = os.path.abspath(options.reads_infile)
     fn_prefix = os.path.abspath(options.outfile_prefix)
@@ -251,7 +307,10 @@ def main(argv=None):
                              fn_ambig,
                              fn_unmatched,
                              fn_results,
-                             options.subprocesses)
+                             options.subprocesses,
+                             options.output_format,
+                             options.second_fastq,
+                             (options.umi_start_position, options.umi_end_position) )
     print "# ...finished demultiplexing"
     print "# Wall time in secs: " + str(time.time() - start_time)
     print str(stats)

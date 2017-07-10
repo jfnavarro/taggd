@@ -21,7 +21,10 @@ def demultiplex(str filename_reads,
                 str filename_ambig,
                 str filename_unmatched,
                 str filename_results,
-                int subprocesses):
+                int subprocesses,
+                str output_format,
+                str second_fastq_filename,
+                tuple umi_coordinates):
     """
     Demultiplexes the contents of a reads file by dividing the work into
     parallel subprocesses, each writing its own file, then
@@ -39,6 +42,11 @@ def demultiplex(str filename_reads,
     cdef list fn_unmatched = list()
     cdef list fn_res = list()
     cdef str frmt = filename_reads.split(".")[-1].lower()
+    if output_format != 'INFILE':
+        if output_format == "FASTQ":   frmt = 'fq'
+        elif output_format == "SAM":   frmt = 'sam'
+        elif output_format == "FASTA": frmt = 'fa'
+        elif output_format == "BAM":   frmt = 'bam'
     cdef str tmp = tempfile.gettempdir()
     if tmp == "" or tmp == None: tmp = "."
     for i in xrange(subprocesses):
@@ -60,9 +68,9 @@ def demultiplex(str filename_reads,
         if filename_results != None:
             fr = "{}{}_part{}_{}.{}".format(tmp, 
                                             os.path.join(os.sep, os.path.basename(filename_results)), 
-                                            i, uuid.uuid4(), frmt)
+                                            i, uuid.uuid4(), 'tsv')
             fn_res.append(fr)
-        job = pool.apply_async(sub.demultiplex_lines_wrapper, (filename_reads, fm, fa, fu, fr, i, subprocesses,))
+        job = pool.apply_async(sub.demultiplex_lines_wrapper, (filename_reads, second_fastq_filename, fm, fa, fu, fr, i, subprocesses, umi_coordinates))
         jobs.append(job)
 
     # Collect results from the workers through the pool result queue.
@@ -116,7 +124,7 @@ cdef merge_files(str filename, list part_names):
                                                         check_sq=False)) as f:
             for part in part_names:
                 with ps.AlignmentFile(part, read_attrib, check_header=True, check_sq=False) as p:
-                    for rec in p:
+                    for rec in p.fetch(until_eof=True):
                         f.write(rec)
     else:
         raise ValueError("Unknown file format to merge")
