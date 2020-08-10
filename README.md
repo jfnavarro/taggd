@@ -35,7 +35,7 @@ TagGD requires PySam and Numpy.
 ## Installation:
 
 (Assuming that you have a virtual environment
-installed such as Anaconda 2.7)
+installed such as Anaconda 3.6)
 
     cd <taggd demultiplexer root>
     python setup.py build
