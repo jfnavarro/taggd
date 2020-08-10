@@ -1,5 +1,3 @@
-[![Build Status](https://travis-ci.org/JoelSjostrand/taggd.svg?branch=master)](https://travis-ci.org/JoelSjostrand/taggd)
-
 # TagGD barcode demultiplexing utilities for Spatial Transcriptomics data.
 
 This is the Python version, which is a generalized, optimized and more
@@ -54,4 +52,4 @@ Alternatively, you can use PIP:
 
 ## Contact: 
 
-jose.fernandez.navarro@scilifelab.se.
+jc.fernandez.navarro@gmail.com
