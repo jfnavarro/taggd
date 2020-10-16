@@ -1,11 +1,8 @@
 # TagGD barcode demultiplexing utilities for Spatial Transcriptomics data.
 
-This is the Python version, which is a generalized, optimized and more
+This tools is a more generalized, flexible, optimized and more
 up-to-date version of the C++ demultiplexer named "findIndexes"
 which you can find here https://github.com/pelinakan/UBD.
-
-See http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0057521
-for the peer-reviewed reference to the program.
 
 The main idea is to extract the cDNA barcodes
 from the input file (FASTQ, FASTA or BAM) and then
