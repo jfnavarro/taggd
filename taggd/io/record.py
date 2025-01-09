@@ -2,7 +2,8 @@
 Base classes for different records that will be written to files
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
+
 
 class Record:
     """
@@ -18,7 +19,7 @@ class Record:
         """
         self.annotation = None
         self.sequence = None
-        self.attributes = {}
+        self.attributes = {}  # type: ignore
 
     def unwrap(self) -> Optional[Any]:
         """

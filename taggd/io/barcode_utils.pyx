@@ -35,7 +35,7 @@ cpdef dict read_barcode_file(str infile_path):
             if length == 0:
                 length = len(seq)
             if len(seq) != length:
-                raise ValueError("Barcode file incorrect, varying lengths among barcodes")
+                raise ValueError("Barcode file incorrect, varying lengths barcodes")
             if seq in res_dict:
                 raise ValueError(f"Barcode file incorrect, duplicate barcode: {seq}")
             res_dict[tmp[0]] = Barcode(tmp[0], tmp[1:])
@@ -60,7 +60,8 @@ cpdef int estimate_min_edit_distance(dict true_barcodes, int max_iters):
     for i, barcode1 in enumerate(seqslist):
         for barcode2 in seqslist[(i+1):]:
             dist = hamming_distance(barcode1, barcode2, min_dist)
-            if dist < min_dist: min_dist = dist
+            if dist < min_dist:
+                min_dist = dist
             iter += 1
             if iter >= max_iters:
                 return min_dist

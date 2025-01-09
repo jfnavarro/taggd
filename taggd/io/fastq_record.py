@@ -4,6 +4,7 @@ a FASTQ record
 """
 from typing import List, Tuple
 from taggd.io.record import Record
+from dnaio import SequenceRecord
 
 
 class FASTQRecord(Record):
@@ -21,10 +22,10 @@ class FASTQRecord(Record):
             qualities: The FASTQ qualities.
         """
         super().__init__()
-        self.header = header
-        self.sequence = sequence
-        self.qualities = qualities
-        self.taggdtags: str = ""
+        self.header = header  # type: ignore
+        self.sequence = sequence  # type: ignore
+        self.qualities = qualities  # type: ignore
+        self.taggdtags = ""
 
     def add_tags(self, added: List[Tuple[str, str]]) -> None:
         """
@@ -35,14 +36,18 @@ class FASTQRecord(Record):
         """
         self.taggdtags = " ".join([f"{k}:{v}" for k, v in added])
 
-    def unwrap(self) -> Tuple[str, str, str]:
+    def unwrap(self) -> SequenceRecord:
         """
-        Returns the FASTQ record as a tuple (header, sequence, quality).
+        Returns the FASTQ record as a dnaio.SequenceRecord (header, sequence, quality).
 
         Returns:
             The FASTQ record with tags included in the header.
         """
-        return (f"{self.header} {self.taggdtags}", self.sequence, self.qualities)
+        return SequenceRecord(
+            f"{self.header} {self.taggdtags}",  # type: ignore
+            self.sequence,  # type: ignore
+            self.qualities,  # type: ignore
+        )
 
     def __str__(self) -> str:
         """

@@ -4,11 +4,15 @@
 """
 Contains utilities for working with k-mer chunks of the barcodes or other sequences.
 """
-cimport cython
 from cpython cimport bool
 from collections import defaultdict
 
-cdef object get_kmers_dicts(list seqs, int k, bool round_robin=False, int slider_increment=1):
+
+def default_dict_factory():
+    return defaultdict(list)
+
+
+cpdef object get_kmers_dicts(list seqs, int k, bool round_robin=False, int slider_increment=1):
     """
     Generates dictionaries for k-mers of a list of sequences.
 
@@ -25,7 +29,7 @@ cdef object get_kmers_dicts(list seqs, int k, bool round_robin=False, int slider
             - The keys are k-mers.
             - The values are dictionaries mapping sequences to lists of k-mer offsets.
     """
-    cdef object kmer2seq = defaultdict(lambda : defaultdict(list))
+    cdef object kmer2seq = defaultdict(default_dict_factory)
     cdef str seq
     cdef str seqq
     cdef str kmer
@@ -67,7 +71,7 @@ cdef list get_kmers(str seq, int k, bool round_robin=False, int slider_increment
     cdef str kmer
     cdef int i
     # Simply compute kmers for the sequence
-    #TODO this function could be used in get_kmers_dictst to avoid code duplication
+    # TODO this function could be used in get_kmers_dictst to avoid code duplication
     for i in range(0, len(seqq)-k+1, slider_increment):
         kmer = seqq[i:i+k]
         kmer_list.append((kmer, i))
@@ -75,5 +79,5 @@ cdef list get_kmers(str seq, int k, bool round_robin=False, int slider_increment
     if len(seqq) % slider_increment != 0:
         i = len(seqq)-k
         kmer = seqq[i:len(seqq)]
-        kmer_list.append((kmer,i))
+        kmer_list.append((kmer, i))
     return kmer_list

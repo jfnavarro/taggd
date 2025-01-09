@@ -1,14 +1,10 @@
-from setuptools import setup, find_packages, Extension
-from Cython.Build import cythonize
+from setuptools import setup, find_packages, Extension  # type: ignore
+from Cython.Build import cythonize  # type: ignore
 import numpy as np
 from glob import glob
 
 # Define Cython extensions
 extensions = [
-    Extension(
-        "taggd.core.demultiplex_core_functions",
-        ["taggd/core/demultiplex_core_functions.pyx"],
-    ),
     Extension(
         "taggd.core.demultiplex_sub_functions",
         ["taggd/core/demultiplex_sub_functions.pyx"],
@@ -17,18 +13,9 @@ extensions = [
         "taggd.core.demultiplex_search_functions",
         ["taggd/core/demultiplex_search_functions.pyx"],
     ),
-    Extension("taggd.core.match", ["taggd/core/match.pyx"]),
-    Extension("taggd.core.match_type", ["taggd/core/match_type.pyx"]),
-    Extension("taggd.core.statistics", ["taggd/core/statistics.pyx"]),
     Extension("taggd.misc.distance_metrics", ["taggd/misc/distance_metrics.pyx"]),
     Extension("taggd.misc.kmer_utils", ["taggd/misc/kmer_utils.pyx"]),
-    Extension("taggd.io.fastq_utils", ["taggd/io/fastq_utils.pyx"]),
     Extension("taggd.io.barcode_utils", ["taggd/io/barcode_utils.pyx"]),
-    Extension("taggd.io.record", ["taggd/io/record.pyx"]),
-    Extension("taggd.io.sam_record", ["taggd/io/sam_record.pyx"]),
-    Extension("taggd.io.fasta_record", ["taggd/io/fasta_record.pyx"]),
-    Extension("taggd.io.fastq_record", ["taggd/io/fastq_record.pyx"]),
-    Extension("taggd.io.reads_reader_writer", ["taggd/io/reads_reader_writer.pyx"]),
 ]
 
 setup(
@@ -45,12 +32,8 @@ setup(
     scripts=glob("scripts/*.py"),
     packages=find_packages(include=["taggd", "taggd.*"]),
     setup_requires=["cython", "numpy"],
-    install_requires=[
-        "setuptools",
-        "pysam",
-        "numpy",
-    ],
-    python_requires=">=3.6",
+    install_requires=["setuptools", "pysam", "numpy", "dnaio"],
+    python_requires=">=3.10",
     classifiers=[
         "Development Status :: 5 - Stable",
         "Programming Language :: Python :: 3.10"

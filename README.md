@@ -45,7 +45,7 @@ python setup.py install
 Alternatively, you can use PIP:
 
 ```console
-    pip install taggd
+pip install taggd
 ```
 
 ## Run

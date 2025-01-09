@@ -23,8 +23,310 @@ import os
 import time
 import multiprocessing as mp
 import argparse
-from taggd.io.barcode_utils import read_barcode_file, estimate_min_edit_distance
+from taggd.io.barcode_utils import read_barcode_file, estimate_min_edit_distance  # type: ignore
 from taggd.core.demultiplex import DemultipleReads
+
+
+def parse_arguments(argv=None):
+    """
+    Parse command-line arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description="Demultiplex reads using barcodes.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+
+    # Required parameters
+    parser.add_argument(
+        "barcodes_infile",
+        help="Path to the barcode file containing true barcodes and their properties.",
+        metavar="BARCODES_INFILE",
+    )
+    parser.add_argument(
+        "reads_infile",
+        help="Path to the reads file (FASTA, FASTQ, SAM, or BAM format).",
+        metavar="READS_INFILE",
+    )
+    parser.add_argument(
+        "outfile_prefix",
+        help="Prefix for output files.",
+        metavar="OUTFILE_PREFIX",
+    )
+
+    # Optional arguments
+    parser.add_argument(
+        "--no-matched-output",
+        help="Do not output matched reads.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--no-ambiguous-output",
+        help="Do not output ambiguous reads.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--no-unmatched-output",
+        help="Do not output unmatched reads.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--no-results-output",
+        help="Do not output a tab-separated results file with stats on the reads.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--start-position",
+        type=int,
+        help="Start position for barcodes in reads (default: %(default)d).",
+        default=0,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--k",
+        type=int,
+        help="K-mer length (default: %(default)d).",
+        default=6,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--max-edit-distance",
+        type=int,
+        help="Maximum edit distance for allowing hits (default: %(default)d).",
+        default=2,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--metric",
+        help="Distance metric: Subglobal, Levenshtein, or Hamming (default: %(default)s).",
+        default="Subglobal",
+        metavar="STRING",
+    )
+    parser.add_argument(
+        "--ambiguity-factor",
+        type=float,
+        help="Factor for determining ambiguous hits (default: %(default).1f).",
+        default=1.0,
+        metavar="FLOAT",
+    )
+    parser.add_argument(
+        "--slider-increment",
+        type=int,
+        help="Space between k-mer searches, "
+        "0 yields k-mer length (default: %(default)d).",
+        default=0,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--overhang",
+        type=int,
+        help="Additional flanking bases around read barcodes "
+        "to allow for insertions when matching (default: %(default)d).",
+        default=2,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--seed",
+        help="Random number generator seed for shuffling ambiguous hits (default: %(default)s).",
+        default=None,
+        metavar="STRING",
+    )
+    parser.add_argument(
+        "--homopolymer-filter",
+        type=int,
+        help="Excludes reads where the barcode contains a homopolymer of the given length. "
+        "0 means no filter (default: %(default)d).",
+        default=8,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--subprocesses",
+        type=int,
+        help="Number of subprocesses to start (default: 0, yielding number of machine cores - 1).",
+        default=0,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--estimate-min-edit-distance",
+        type=int,
+        help="If set, estimates the minimum edit distance among true barcodes "
+        "by comparing the specified number of pairs. 0 means no estimation (default: %(default)d).",
+        default=0,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--no-offset-speedup",
+        help="Disables offset speedup routine, increasing runtime but potentially yielding more hits.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--multiple-hits-keep-one",
+        help="When multiple k-mer hits are found for a record, "
+        "keep one as unambiguous and the rest as ambiguous.",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--trim-sequences",
+        nargs="+",
+        type=int,
+        help="Trims specified ranges from the barcodes. Provide ranges as START END START END ... "
+        "where START and END are integer positions (0-based).",
+        default=None,
+        metavar="INT",
+    )
+    parser.add_argument(
+        "--barcode-tag",
+        type=str,
+        help="Uses the sequence in the specified tag for barcode demultiplexing. "
+        "The tag must be a two-letter string and is applicable only for SAM/BAM input files.",
+        default=None,
+        metavar="STRING",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s 0.3.7",
+    )
+
+    return parser.parse_args(argv)
+
+
+def validate_arguments(options):
+    """
+    Validate command-line arguments.
+
+    Args:
+        options (argparse.Namespace): Parsed command-line arguments.
+
+    Raises:
+        ValueError: If any argument fails validation.
+    """
+    # Validate barcode input file
+    if not os.path.isfile(options.barcodes_infile):
+        raise ValueError(f"Invalid barcodes input file path: {options.barcodes_infile}")
+
+    # Validate reads input file
+    if not os.path.isfile(options.reads_infile):
+        raise ValueError(f"Invalid reads input file path: {options.reads_infile}")
+
+    # Validate reads input file format
+    valid_formats = [".fastq", ".fq", ".fasta", ".fa", ".sam", ".bam"]
+    if not any(options.reads_infile.lower().endswith(ext) for ext in valid_formats):
+        raise ValueError(
+            "Invalid reads input file format. Must be one of: "
+            f"{', '.join(valid_formats)}."
+        )
+
+    # Validate output file prefix
+    if not options.outfile_prefix or not options.outfile_prefix.strip():
+        raise ValueError("Output file prefix cannot be empty.")
+
+    # Validate k-mer length
+    if options.k <= 0:
+        raise ValueError("K-mer length (--k) must be greater than 0.")
+
+    # Validate max edit distance
+    if options.max_edit_distance < 0:
+        raise ValueError(
+            "Max edit distance (--max-edit-distance) must be 0 or greater."
+        )
+
+    # Validate metric
+    valid_metrics = ["Subglobal", "Levenshtein", "Hamming"]
+    if options.metric not in valid_metrics:
+        raise ValueError(
+            f"Invalid metric (--metric). Must be one of: {', '.join(valid_metrics)}."
+        )
+
+    # Validate ambiguity factor
+    if options.ambiguity_factor < 1.0:
+        raise ValueError(
+            "Ambiguity factor (--ambiguity-factor) must be 1.0 or greater."
+        )
+
+    # Validate slider increment
+    if options.slider_increment < 0:
+        raise ValueError("Slider increment (--slider-increment) must be 0 or greater.")
+
+    # Set slider increment to k if it is 0
+    if options.slider_increment == 0:
+        options.slider_increment = options.k
+
+    # Validate start position
+    if options.start_position < 0:
+        raise ValueError("Start position (--start-position) must be 0 or greater.")
+
+    # Validate overhang
+    if options.overhang < 0:
+        raise ValueError("Overhang (--overhang) must be 0 or greater.")
+
+    # Ensure overhang is 0 for Hamming metric
+    if options.metric == "Hamming" and options.overhang > 0:
+        raise ValueError(
+            "Overhang (--overhang) must be 0 when using the Hamming metric."
+        )
+
+    # Validate subprocesses
+    if options.subprocesses < 0:
+        raise ValueError(
+            "Number of subprocesses (--subprocesses) must be 0 or greater."
+        )
+
+    # Validate homopolymer filter
+    if options.homopolymer_filter < 0:
+        raise ValueError(
+            "Homopolymer filter (--homopolymer-filter) must be 0 or greater."
+        )
+
+    # Validate trim sequences
+    if options.trim_sequences:
+        if len(options.trim_sequences) % 2 != 0:
+            raise ValueError(
+                "Invalid trim sequences (--trim-sequences). The number of positions "
+                "must be even, specifying start and end pairs."
+            )
+        if min(options.trim_sequences) < 0:
+            raise ValueError(
+                "Invalid trim sequences (--trim-sequences). Positions must be non-negative."
+            )
+
+    # Validate barcode tag
+    if options.barcode_tag:
+        if len(options.barcode_tag) != 2:
+            raise ValueError(
+                f"Invalid barcode tag (--barcode-tag). Must be a two-letter string, "
+                f"but got '{options.barcode_tag}'."
+            )
+        if not (
+            options.reads_infile.lower().endswith(".sam")
+            or options.reads_infile.lower().endswith(".bam")
+        ):
+            raise ValueError(
+                "Barcode tag (--barcode-tag) is only valid for SAM or BAM formatted input files."
+            )
+
+    # Validate estimate min edit distance
+    if options.estimate_min_edit_distance < 0:
+        raise ValueError(
+            "Estimate min edit distance (--estimate-min-edit-distance) must be 0 or greater."
+        )
+
+    # If no output files are selected, warn the user
+    if (
+        options.no_matched_output
+        and options.no_ambiguous_output
+        and options.no_unmatched_output
+        and options.no_results_output
+    ):
+        raise ValueError(
+            "All output files are disabled (--no-matched-output, --no-ambiguous-output, "
+            "--no-unmatched-output, --no-results-output). At least one output must be enabled."
+        )
 
 
 def main(argv=None):
@@ -33,243 +335,11 @@ def main(argv=None):
     Starts a timer, create parameter parsers, parsers parameters
     and run all the steps for the demultiplexing.
     """
-
     start_time = time.time()
 
-    # Create a parser
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
-    )
-
-    # Needed parameters
-    parser.add_argument(
-        "barcodes_infile",
-        metavar="barcodes-infile",
-        help="The file with true barcode IDs and other properties.",
-    )
-    parser.add_argument(
-        "reads_infile",
-        metavar="reads-infile",
-        help="The FASTQ, FASTA, SAM or BAM file with reads.",
-    )
-    parser.add_argument(
-        "outfile_prefix", metavar="outfile-prefix", help="The output files prefix."
-    )
-
-    # Optional arguments.
-    parser.add_argument(
-        "--no-matched-output",
-        help="Do not output matched reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--no-ambiguous-output",
-        help="Do not output ambiguous reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--no-unmatched-output",
-        help="Do not output unmatched reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--no-results-output",
-        help="Do not output a tab-separated results file with stats on the reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--start-position",
-        type=int,
-        help="The start position for barcodes in reads (default: %(default)d)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--k",
-        type=int,
-        help="The kmer length (default: %(default)d)",
-        default=6,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--max-edit-distance",
-        type=int,
-        help="The max edit distance for allowing hits (default: %(default)d)",
-        default=2,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--metric",
-        help="Distance metric: Subglobal, Levenshtein or Hamming (default: %(default)s)",
-        default="Subglobal",
-        metavar="[string]",
-    )
-    parser.add_argument(
-        "--ambiguity-factor",
-        type=float,
-        help="Top matches within this factor from the best match are considered ambiguous,\n"
-        "for instance with factor=1.5, having one match with distance 2 and two matches\n"
-        "with distance 4 yields all three matches as ambiguous hits. Perfect hits are always\n"
-        "considered non-ambiguous, irrespective of factor. (default: %(default)d)",
-        default=1.0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--slider-increment",
-        type=int,
-        help="Space between kmer searches, "
-        "0 yields kmer length (default: %(default)d)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--overhang",
-        type=int,
-        help="Additional flanking bases around read barcode\n"
-        "to allow for insertions when matching (default: %(default)d)",
-        default=2,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--seed",
-        help="Random number generator seed for shuffling ambiguous hits (default: %(default)s)",
-        default=None,
-        metavar="[string]",
-    )
-    parser.add_argument(
-        "--homopolymer-filter",
-        type=int,
-        help="If set, excludes reads where the barcode part contains\n"
-        "a homopolymer of the given length,\n"
-        "0 means no filter (default: %(default)d)",
-        default=8,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--subprocesses",
-        type=int,
-        help="Number of subprocesses started (default: 0, yielding number of machine cores - 1)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--estimate-min-edit-distance",
-        type=int,
-        help="If set, estimates the min edit distance among true\n"
-        "barcodes by comparing the specified number of pairs,\n"
-        "0 means no estimation (default: %(default)d)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--no-offset-speedup",
-        help="Turns off an offset speedup routine.\n"
-        "Increases running time but may yield more hits.",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--multiple-hits-keep-one",
-        help="When multiple kmer hits are found for a record\n"
-        "keep one as unambiguous and the rest as ambiguous",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--trim-sequences",
-        nargs="+",
-        type=int,
-        default=None,
-        help="Trims from the barcodes in the input file\n"
-        "The bases given in the list of tuples as START END START END .. where\n"
-        "START is the integer position of the first base (0 based) and END is the integer\n"
-        "position of the last base.\nTrimmng sequences can be given several times.",
-    )
-    parser.add_argument(
-        "--barcode-tag",
-        type=str,
-        help="Use the sequence in specified tag instead of the read sequence for the barcode demultiplexing.\n"
-        "The tag must be a two-letter string and be present for all records in the input file.\n"
-        "Can only be used with SAM or BAM formatted input files.",
-        default=None,
-        metavar="[str]",
-    )
-    parser.add_argument("--version", action="version", version="%(prog)s " + "0.3.2")
-
-    # Parse
-    if argv is None:
-        options = parser.parse_args()
-    else:
-        options = parser.parse_args(argv)
-
-    # Validate all options.
-    if not os.path.isfile(options.barcodes_infile):
-        raise ValueError("Invalid true barcodes input file path.")
-    if not os.path.isfile(options.reads_infile):
-        raise ValueError("Invalid reads input file path.")
-    if not (
-        options.reads_infile.upper().endswith(".FASTQ")
-        or options.reads_infile.upper().endswith(".FQ")
-        or options.reads_infile.upper().endswith(".SAM")
-        or options.reads_infile.upper().endswith(".FASTA")
-        or options.reads_infile.upper().endswith(".FA")
-        or options.reads_infile.upper().endswith(".BAM")
-    ):
-        raise ValueError(
-            "Invalid reads input file format: must be FASTQ, "
-            "FASTA, SAM or BAM format and file end with .fq, fastq, .fa, .fasta, .sam or .bam"
-        )
-    if options.outfile_prefix is None or options.outfile_prefix == "":
-        raise ValueError("Invalid output file prefix.")
-    if options.k <= 0:
-        raise ValueError("Invalid kmer length. Must be > 0.")
-    if options.max_edit_distance < 0:
-        raise ValueError("Invalid max edit distance. Must be >= 0.")
-    if options.metric not in ("Subglobal", "Levenshtein", "Hamming"):
-        raise ValueError("Invalid metric. Must be Subglobal, Levenshtein or Hamming.")
-    if options.slider_increment < 0:
-        raise ValueError("Invalid slider increment. Must be >= 0.")
-    if options.slider_increment == 0:
-        options.slider_increment = int(options.k)
-    if options.start_position < 0:
-        raise ValueError("Invalid start position. Must be >= 0.")
-    if options.overhang < 0:
-        raise ValueError("Invalid overhang. Must be >= 0.")
-    if options.metric == "Hamming" and options.overhang > 0:
-        raise ValueError("Invalid overhang. Must be 0 for Hamming metric.")
-    if options.subprocesses < 0:
-        raise ValueError("Invalid no. of subprocesses. Must be >= 0.")
-    if options.ambiguity_factor < 1.0:
-        raise ValueError("Invalid ambiguity factor. Must be >= 1.")
-    # Check the the trimming sequences given are valid
-    if (
-        options.trim_sequences is not None
-        and (len(options.trim_sequences) % 2 != 0 or min(options.trim_sequences)) < 0
-    ):
-        raise ValueError(
-            "Invalid trimming sequences given "
-            "The number of positions given must be even and they must fit into the barcode length."
-        )
-    if options.barcode_tag:
-        if len(options.barcode_tag) != 2:
-            raise ValueError(
-                'Invalid the "--barcode-tag" option must specify a two-letter string, current length is '
-                + str(len(options.barcode_tag))
-                + ' letters ("'
-                + options.barcode_tag
-                + '").\n'
-            )
-        if not (
-            options.reads_infile.upper().endswith(".SAM")
-            or options.reads_infile.upper().endswith(".BAM")
-        ):
-            raise ValueError(
-                'Invalid the "--barcode-tag" option can only be used with SAM or BAM formatted input files.\n'
-            )
+    # Parse arguments and validate
+    options = parse_arguments(argv)
+    validate_arguments(options)
 
     # Read barcodes file
     true_barcodes = read_barcode_file(options.barcodes_infile)
@@ -290,22 +360,22 @@ def main(argv=None):
     if options.subprocesses == 0:
         options.subprocesses = mp.cpu_count() - 1
 
-    print("# Options: " + str(options).split("Namespace")[-1])
-    print("# Barcodes input file: " + str(fn_bc))
-    print("# Reads input file: " + str(fn_reads))
-    print("# Matched output file: " + str(fn_matched))
-    print("# Ambiguous output file: " + str(fn_ambig))
-    print("# Unmatched output file: " + str(fn_unmatched))
-    print("# Results output file: " + str(fn_results))
-    print("# Number of barcodes in input: " + str(len(true_barcodes)))
+    print(f"# Options: {str(options).split('Namespace')[-1]}")
+    print(f"# Barcodes input file: {fn_bc}")
+    print(f"# Reads input file: {fn_reads}")
+    print(f"# Matched output file: {fn_matched}")
+    print(f"# Ambiguous output file: {fn_ambig}")
+    print(f"# Unmatched output file: {fn_unmatched}")
+    print(f"# Results output file: {fn_results}")
+    print(f"# Number of barcodes in input: {len(true_barcodes)}")
     lngth = len(list(true_barcodes.keys())[0])
-    print("# Barcode length: " + str(lngth))
+    print(f"# Barcode length: {lngth}")
     print(
-        "# Barcode length when overhang added: "
-        + str(lngth + min(options.start_position, options.overhang) + options.overhang)
+        f"# Barcode length when overhang added: "
+        f"{lngth + min(options.start_position, options.overhang) + options.overhang}"
     )
 
-    # Check barcodes file.
+    # Check barcodes file
     if options.estimate_min_edit_distance > 0:
         min_dist = estimate_min_edit_distance(
             true_barcodes, options.estimate_min_edit_distance
@@ -316,8 +386,7 @@ def main(argv=None):
                 "to estimated minimum edit distance among true barcodes."
             )
         print(
-            "# Estimate of minimum edit distance between true barcodes (may be less): "
-            + str(min_dist)
+            f"# Estimate of minimum edit distance between true barcodes (may be less): {min_dist}"
         )
     else:
         print(
@@ -327,7 +396,7 @@ def main(argv=None):
     # Make the input trim coordinates a list of tuples
     trim_sequences = None
     if options.trim_sequences is not None:
-        trim_sequences = list()
+        trim_sequences = []
         for i in range(len(options.trim_sequences) - 1):
             if i % 2 == 0:
                 trim_sequences.append(
@@ -337,7 +406,27 @@ def main(argv=None):
     # Demultiplex
     print("# Starting demultiplexing...")
     demux = DemultipleReads(
-        # TODO pass arguments
+        fn_reads,
+        true_barcodes,
+        options.k,
+        options.metric,
+        options.slider_increment,
+        options.start_position,
+        options.overhang,
+        options.overhang,
+        options.max_edit_distance,
+        options.homopolymer_filter,
+        options.ambiguity_factor,
+        options.no_offset_speedup,
+        options.seed,
+        options.multiple_hits_keep_one,
+        trim_sequences,
+        options.barcode_tag,
+        options.subprocesses,
+        fn_matched,
+        fn_ambig,
+        fn_unmatched,
+        fn_results,
     )
     demux.run()
     print("# ...finished demultiplexing")

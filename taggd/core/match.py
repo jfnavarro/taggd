@@ -3,12 +3,7 @@ This represent a barcode match with all
 the necessary information that can be used to
 write to a file later
 """
-# Match type constants
-KILL = -1
-UNMATCHED = 0
-MATCHED_PERFECTLY = 1
-MATCHED_UNAMBIGUOUSLY = 2
-MATCHED_AMBIGUOUSLY = 3
+import taggd.constants as constants  # type: ignore
 
 
 def match_type_to_str(match_type: int) -> str:
@@ -21,13 +16,13 @@ def match_type_to_str(match_type: int) -> str:
     Returns:
         str: The string representation of the match type.
     """
-    if match_type == UNMATCHED:
+    if match_type == constants.UNMATCHED:
         return "UNMATCHED"
-    elif match_type == MATCHED_PERFECTLY:
+    elif match_type == constants.MATCHED_PERFECTLY:
         return "MATCHED_PERFECTLY"
-    elif match_type == MATCHED_UNAMBIGUOUSLY:
+    elif match_type == constants.MATCHED_UNAMBIGUOUSLY:
         return "MATCHED_UNAMBIGUOUSLY"
-    elif match_type == MATCHED_AMBIGUOUSLY:
+    elif match_type == constants.MATCHED_AMBIGUOUSLY:
         return "MATCHED_AMBIGUOUSLY"
     return "KILL"
 

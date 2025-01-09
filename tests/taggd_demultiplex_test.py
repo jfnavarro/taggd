@@ -6,9 +6,9 @@ Unit-test for run-tests
 import unittest
 import tempfile
 import os
-import taggd.core.demultiplex as deplex
 import filecmp
 import time
+import subprocess
 
 
 class TestDemultiplexer(unittest.TestCase):
@@ -36,6 +36,7 @@ class TestDemultiplexer(unittest.TestCase):
         print("# Demultiplexer test output directory: " + outdir)
 
         args = [
+            "taggd_demultiplex.py",
             "--k",
             "7",
             "--max-edit-distance",
@@ -52,7 +53,7 @@ class TestDemultiplexer(unittest.TestCase):
         # Start the demultiplexer
         try:
             print("\n# Running SAM test with parameters: " + " ".join(args))
-            deplex.main(args)
+            subprocess.check_call(args)
             self.validate_output_data("Normal SAM test", "sam", outdir)
         except Exception as e:
             print(e)
@@ -64,6 +65,7 @@ class TestDemultiplexer(unittest.TestCase):
         """
         outdir = tempfile.mkdtemp(prefix="taggd_demultiplex_test_out_bam_")
         args = [
+            "taggd_demultiplex.py",
             "--k",
             "6",
             "--max-edit-distance",
@@ -80,7 +82,7 @@ class TestDemultiplexer(unittest.TestCase):
         # Start the demultiplexer
         try:
             print("\n# Running BAM test with parameters: " + " ".join(args))
-            deplex.main(args)
+            subprocess.check_call(args)
             self.validate_output_data("Normal BAM test", "bam", outdir)
         except Exception as e:
             print(e)
@@ -92,6 +94,7 @@ class TestDemultiplexer(unittest.TestCase):
         """
         outdir = tempfile.mkdtemp(prefix="taggd_demultiplex_test_out_fastq_")
         args = [
+            "taggd_demultiplex.py",
             "--k",
             "4",
             "--max-edit-distance",
@@ -108,7 +111,7 @@ class TestDemultiplexer(unittest.TestCase):
         # Start the demultiplexer
         try:
             print("\n# Running Fastq test with parameters: " + " ".join(args))
-            deplex.main(args)
+            subprocess.check_call(args)
             self.validate_output_data("Normal Fastq test", "fq", outdir)
         except Exception as e:
             print(e)
@@ -120,6 +123,7 @@ class TestDemultiplexer(unittest.TestCase):
         """
         outdir = tempfile.mkdtemp(prefix="taggd_demultiplex_test_out_fasta_")
         args = [
+            "taggd_demultiplex.py",
             "--k",
             "4",
             "--max-edit-distance",
@@ -136,7 +140,7 @@ class TestDemultiplexer(unittest.TestCase):
         # Start the demultiplexer
         try:
             print("\n# Running Fasta test with parameters: " + " ".join(args))
-            deplex.main(args)
+            subprocess.check_call(args)
             self.validate_output_data("Normal Fasta test", "fa", outdir)
         except Exception as e:
             print(e)

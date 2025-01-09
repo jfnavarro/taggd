@@ -83,34 +83,33 @@ cdef int subglobal_distance(str s1, str s2):
     cdef int xLen = len(s1)
     cdef int yLen = len(s2)
     if xLen < yLen:
-        raise ValueError("Sub-global edit distance is undefined for sequences " \
+        raise ValueError("Sub-global edit distance is undefined for sequences "
                          "where the probe is shorter than the aligned sequence.")
     cdef int x
     cdef int y
     cdef np.ndarray[np.uint32_t, ndim=2] d = np.empty([xLen+1, yLen+1], dtype=np.uint32)
 
     # Initialize array
-    for x in xrange(0, xLen+1):
-        d[x,0] = 0
-    for y in xrange(1, yLen+1):
-        d[0,y] = y # To ensure all of s2 is spanned.
+    for x in range(0, xLen+1):
+        d[x, 0] = 0
+    for y in range(1, yLen+1):
+        d[0, y] = y  # To ensure all of s2 is spanned.
 
     # Perform DP.
-    for x in xrange(1, xLen+1):
+    for x in range(1, xLen+1):
         # Fill matrix.
-        for y in xrange(1, yLen+1):
-            d[x,y] = min( min(d[x-1,y]+1, d[x,y-1]+1), d[x-1,y-1] + int(s1[x-1] != s2[y-1]) )
+        for y in range(1, yLen+1):
+            d[x, y] = min(min(d[x-1, y]+1, d[x, y-1]+1), d[x-1, y-1] + int(s1[x-1] != s2[y-1]))
 
     # Find min for sub-global alignment so that all of s2 is covered,
     # but not necessarily all of s1 sequence.
     cdef int mini = 1000000
-    cdef int iPos = 0
+    cdef int iPos = 0  # no-cython-lint
     cdef int i = xLen
-    cdef int j
     while i > 0:
-        if d[i,yLen] < mini:
-            mini = d[i,yLen]
-            iPos = i
+        if d[i, yLen] < mini:
+            mini = d[i, yLen]
+            iPos = i  # no-cython-lint
         i -= 1
 
     # Return min distance

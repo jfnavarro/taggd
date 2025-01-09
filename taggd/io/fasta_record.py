@@ -4,6 +4,7 @@ a FASTA record
 """
 from typing import List, Tuple
 from taggd.io.record import Record
+from dnaio import SequenceRecord
 
 
 class FASTARecord(Record):
@@ -20,9 +21,9 @@ class FASTARecord(Record):
             sequence: The FASTA sequence.
         """
         super().__init__()
-        self.header = header
-        self.sequence = sequence
-        self.taggdtags: str = ""
+        self.header = header  # type: ignore
+        self.sequence = sequence  # type: ignore
+        self.taggdtags = ""  # type: ignore
 
     def add_tags(self, added: List[Tuple[str, str]]) -> None:
         """
@@ -33,14 +34,14 @@ class FASTARecord(Record):
         """
         self.taggdtags = " ".join([f"{k}:{v}" for k, v in added])
 
-    def unwrap(self) -> Tuple[str, str]:
+    def unwrap(self) -> SequenceRecord:
         """
-        Returns the FASTA record as a tuple (annotation, sequence).
+        Returns the FASTA record as a SequenceRecord (annotation, sequence).
 
         Returns:
             The FASTA record with tags included in the annotation.
         """
-        return (f"{self.header} {self.taggdtags}", self.sequence)
+        return SequenceRecord(f"{self.header} {self.taggdtags}", self.sequence)  # type: ignore
 
     def __str__(self) -> str:
         """

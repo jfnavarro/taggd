@@ -8,11 +8,10 @@ class Statistics(object):
     Shorthand for a statistics object.
     """
 
-    def __init__(self, id, max_edit_distance):
+    def __init__(self, max_edit_distance):
         """
         Constructor
         """
-        self.id = id
         self.time = 0
         self.total_reads = 0
         self.total_reads_wr = 0

@@ -5,10 +5,10 @@ The idea is to write always the abstract class called Record
 import pysam
 import os
 from typing import Generator, Union
-from taggd.io.sam_record import *
-from taggd.io.fasta_record import *
-from taggd.io.fastq_record import *
 import dnaio
+from taggd.io.sam_record import SAMRecord
+from taggd.io.fasta_record import FASTARecord
+from taggd.io.fastq_record import FASTQRecord
 
 
 class ReadsReaderWriter:
@@ -51,7 +51,7 @@ class ReadsReaderWriter:
 
     def reader_open(
         self,
-    ) -> Generator[Union[dnaio.Record, pysam.AlignedSegment], None, None]:
+    ) -> Generator[Union[FASTARecord, FASTQRecord, SAMRecord], None, None]:
         """
         Opens the reads file for reading and yields records.
 
@@ -61,18 +61,22 @@ class ReadsReaderWriter:
         self.reader_close()
 
         if self.file_type == self.FASTA:
-            self.infile = dnaio.FastaReader(self.infile_name)
+            self.infile = dnaio.FastaReader(self.infile_name)  # type: ignore
         elif self.file_type == self.FASTQ:
-            self.infile = dnaio.FastqReader(self.infile_name)
+            self.infile = dnaio.FastqReader(self.infile_name)  # type: ignore
         elif self.file_type == self.SAM:
-            self.infile = pysam.AlignmentFile(self.infile_name, "r")
-        elif self.file_type == self.BAM:
-            self.infile = pysam.AlignmentFile(self.infile_name, "rb")
+            self.infile = pysam.AlignmentFile(self.infile_name, "r")  # type: ignore
         else:
-            raise ValueError("Unsupported reads file format!")
+            self.infile = pysam.AlignmentFile(self.infile_name, "rb")  # type: ignore
 
-        for record in self.infile:
-            yield record
+        for orig in self.infile:  # type: ignore
+            if self.file_type == self.FASTA:
+                rec = FASTARecord(orig.name, orig.sequence)  # type: ignore
+            elif self.file_type == self.FASTQ:
+                rec = FASTQRecord(orig.name, orig.sequence, orig.qualities)  # type: ignore
+            else:
+                rec = SAMRecord(orig)  # type: ignore
+            yield rec
 
     def reader_close(self) -> None:
         """
