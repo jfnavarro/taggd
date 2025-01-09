@@ -24,7 +24,7 @@ class DemultipleReads:
     def __init__(
         self,
         filename: str,
-        true_barcodes: Dict[str, Tuple[str, str]],
+        true_barcodes: Dict[str, Any],
         k: int,
         metric: str,
         slider_increment: int,
