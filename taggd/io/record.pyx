@@ -1,35 +1,50 @@
 """
 Base classes for different records that will be written to files
 """
-class Record(object):
+
+from typing import Any, Dict, List, Optional, Tuple
+
+class Record:
     """
-    Shorthand for a record. To keep things simple, we use a single object
-    regardless of file format, and let util classes deal with conversions.
-    Not cdef-cythonized to keep thread compatible.
+    Represents a generic record for various file formats.
+
+    This class serves as a universal object for representing records, with utility
+    classes handling specific file format conversions.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
-        Constructor
+        Initializes a Record instance.
         """
         self.annotation = None
         self.sequence = None
-        self.attributes = dict()
+        self.attributes = {}
 
-    def unwrap(self):
+    def unwrap(self) -> Optional[Any]:
         """
-        Unwraps an object to its proper original representation.
+        Converts the record to its original representation.
+
+        Returns:
+            The original representation of the record, if applicable.
         """
         return None
 
-    def add_tags(self, list added):
+    def add_tags(self, added: List[Tuple[str, Any]]) -> None:
         """
-        Adds tags provided as a list of (name, attr) pairs.
-        """
-        return
+        Adds tags to the record as key-value pairs.
 
-    def __str__(self):
+        Args:
+            added: A list of tuples where each tuple contains
+            a tag name and its corresponding value.
         """
-        String representation
+        for key, value in added:
+            self.attributes[key] = value
+
+    def __str__(self) -> str:
         """
-        return "%s\t%s\t%s" % (str(self.annotation),str(self.sequence),str(self.attributes))
+        Returns a string representation of the record.
+
+        Returns:
+            A tab-separated string of the annotation, sequence, and attributes.
+        """
+        return f"{str(self.annotation)}\t{str(self.sequence)}\t{str(self.attributes)}"

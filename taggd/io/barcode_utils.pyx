@@ -5,12 +5,12 @@
 Contains utilities for handling barcodes.
 """
 
-from taggd.misc.distance_metrics cimport *
+from taggd.misc.distance_metrics cimport hamming_distance
 import random
 
 cdef class Barcode:
     """
-    Holds a Spatial Transcriptomics barcode sequence and 
+    Holds a Spatial Transcriptomics barcode sequence and
     attributes such as feature coordinates.
     """
     def __cinit__(self, str seq, list attributes):
@@ -19,9 +19,8 @@ cdef class Barcode:
 
 cpdef dict read_barcode_file(str infile_path):
     """
-    Reads a barcode ("chip") file and returns the barcodes.
-    :param infile_path: chip file.
-    :return: a dictionary with barcode sequences as keys and Barcode instances as values.
+    Reads a barcode ("chip") file and returns the barcodes as a dictionary
+    with barcode sequences as keys and Barcode instances as values.
     """
     cdef dict res_dict = {}
     cdef str line
@@ -38,16 +37,14 @@ cpdef dict read_barcode_file(str infile_path):
             if len(seq) != length:
                 raise ValueError("Barcode file incorrect, varying lengths among barcodes")
             if seq in res_dict:
-                raise ValueError("Barcode file incorrect, duplicate barcode: " + seq)
+                raise ValueError(f"Barcode file incorrect, duplicate barcode: {seq}")
             res_dict[tmp[0]] = Barcode(tmp[0], tmp[1:])
     return res_dict
 
 cpdef int estimate_min_edit_distance(dict true_barcodes, int max_iters):
     """
     Reads a barcodes dict and estimates the minimum edit distance
-    by comparing a certain number of pairs.
-    :param a dict of barcode -> Barcode
-    :param max_iters the max number of iterations to try
+    by comparing a certain number of pairs until max_iters is reached.
     """
     # Compute minimum edit distance.
     # Get the barcodes and shuffle them
@@ -60,7 +57,7 @@ cpdef int estimate_min_edit_distance(dict true_barcodes, int max_iters):
     cdef int i
     cdef int dist
     cdef int iter = 0
-    for i,barcode1 in enumerate(seqslist):
+    for i, barcode1 in enumerate(seqslist):
         for barcode2 in seqslist[(i+1):]:
             dist = hamming_distance(barcode1, barcode2, min_dist)
             if dist < min_dist: min_dist = dist

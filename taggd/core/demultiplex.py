@@ -1,370 +1,210 @@
 """
-Runs taggd, a tool to demultiplex (link molecular barcodes back to) a file of genetic reads,
-typically obtained by sequencing. For matched reads, the barcode and its related properties
-are added to the read. Unmatched reads, ambiguously matched reads, and stats are by default
-produced as output files as well.
-
-The input ID file should be tab-delimited with the following format:
-<barcode>   <prop1>   <prop2>   ...
-<barcode>   <prop1>   <prop2>   ...
-
-The input files can be in FASTA, FASTQ, SAM or BAM format. Matched files will be appended
-with the barcode and properties like this:
-
-B0:Z:<barcode> B1:Z:<prop1> B2:Z:<prop3> ...
-
-Source:          https://github.com/SpatialTranscriptomicsResearch/taggd
-Python package:  https://pypi.python.org/pypi/taggd
-Contact:         joel.sjostrand@gmail.com;jc.fernandez.navarro@gmail.com
 """
 import os
+from typing import Tuple, Any, List, Dict, Optional
 import time
-import multiprocessing as mp
-import argparse
-import taggd.io.barcode_utils as bu
-import taggd.core.demultiplex_core_functions as core
-import taggd.core.demultiplex_sub_functions as sub
-import taggd.core.demultiplex_search_functions as srch
+from concurrent.futures import ThreadPoolExecutor
+import queue
+import threading
+from taggd.core.statistics import Statistics
+from taggd.misc.kmer_utils import get_kmers_dicts
+from taggd.core.demultiplex_sub_functions import demultiplex_record
+
+# Metric constants
+KILL = -1
+SUBGLOBAL = 0
+LEVENSHTEIN = 1
+HAMMING = 2
 
 
-def main(argv=None):
+class DemultipleReads:
     """
-    Main application.
-    Starts a timer, create parameter parsers, parsers parameters
-    and run all the steps for the demultiplexing.
+    A class to process files (FASTA, FASTQ, SAM, BAM) in chunks using a Cython function
+    and write the results to output files using a thread-safe queue.
     """
 
-    start_time = time.time()
-
-    # Create a parser
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
-    )
-
-    # Needed parameters
-    parser.add_argument(
-        "barcodes_infile",
-        metavar="barcodes-infile",
-        help="The file with true barcode IDs and other properties.",
-    )
-    parser.add_argument(
-        "reads_infile",
-        metavar="reads-infile",
-        help="The FASTQ, FASTA, SAM or BAM file with reads.",
-    )
-    parser.add_argument(
-        "outfile_prefix", metavar="outfile-prefix", help="The output files prefix."
-    )
-
-    # Optional arguments.
-    parser.add_argument(
-        "--no-matched-output",
-        help="Do not output matched reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--no-ambiguous-output",
-        help="Do not output ambiguous reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--no-unmatched-output",
-        help="Do not output unmatched reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--no-results-output",
-        help="Do not output a tab-separated results file with stats on the reads",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--start-position",
-        type=int,
-        help="The start position for barcodes in reads (default: %(default)d)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--k",
-        type=int,
-        help="The kmer length (default: %(default)d)",
-        default=6,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--max-edit-distance",
-        type=int,
-        help="The max edit distance for allowing hits (default: %(default)d)",
-        default=2,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--metric",
-        help="Distance metric: Subglobal, Levenshtein or Hamming (default: %(default)s)",
-        default="Subglobal",
-        metavar="[string]",
-    )
-    parser.add_argument(
-        "--ambiguity-factor",
-        type=float,
-        help="Top matches within this factor from the best match are considered ambiguous,\n"
-        "for instance with factor=1.5, having one match with distance 2 and two matches\n"
-        "with distance 4 yields all three matches as ambiguous hits. Perfect hits are always\n"
-        "considered non-ambiguous, irrespective of factor. (default: %(default)d)",
-        default=1.0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--slider-increment",
-        type=int,
-        help="Space between kmer searches, "
-        "0 yields kmer length (default: %(default)d)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--overhang",
-        type=int,
-        help="Additional flanking bases around read barcode\n"
-        "to allow for insertions when matching (default: %(default)d)",
-        default=2,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--seed",
-        help="Random number generator seed for shuffling ambiguous hits (default: %(default)s)",
-        default=None,
-        metavar="[string]",
-    )
-    parser.add_argument(
-        "--homopolymer-filter",
-        type=int,
-        help="If set, excludes reads where the barcode part contains\n"
-        "a homopolymer of the given length,\n"
-        "0 means no filter (default: %(default)d)",
-        default=8,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--subprocesses",
-        type=int,
-        help="Number of subprocesses started (default: 0, yielding number of machine cores - 1)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--estimate-min-edit-distance",
-        type=int,
-        help="If set, estimates the min edit distance among true\n"
-        "barcodes by comparing the specified number of pairs,\n"
-        "0 means no estimation (default: %(default)d)",
-        default=0,
-        metavar="[int]",
-    )
-    parser.add_argument(
-        "--no-offset-speedup",
-        help="Turns off an offset speedup routine.\n"
-        "Increases running time but may yield more hits.",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--multiple-hits-keep-one",
-        help="When multiple kmer hits are found for a record\n"
-        "keep one as unambiguous and the rest as ambiguous",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument(
-        "--trim-sequences",
-        nargs="+",
-        type=int,
-        default=None,
-        help="Trims from the barcodes in the input file\n"
-        "The bases given in the list of tuples as START END START END .. where\n"
-        "START is the integer position of the first base (0 based) and END is the integer\n"
-        "position of the last base.\nTrimmng sequences can be given several times.",
-    )
-    parser.add_argument(
-        "--barcode-tag",
-        type=str,
-        help="Use the sequence in specified tag instead of the read sequence for the barcode demultiplexing.\n"
-        "The tag must be a two-letter string and be present for all records in the input file.\n"
-        "Can only be used with SAM or BAM formatted input files.",
-        default=None,
-        metavar="[str]",
-    )
-    parser.add_argument("--version", action="version", version="%(prog)s " + "0.3.2")
-
-    # Parse
-    if argv is None:
-        options = parser.parse_args()
-    else:
-        options = parser.parse_args(argv)
-
-    # Validate all options.
-    if not os.path.isfile(options.barcodes_infile):
-        raise ValueError("Invalid true barcodes input file path.")
-    if not os.path.isfile(options.reads_infile):
-        raise ValueError("Invalid reads input file path.")
-    if not (
-        options.reads_infile.upper().endswith(".FASTQ")
-        or options.reads_infile.upper().endswith(".FQ")
-        or options.reads_infile.upper().endswith(".SAM")
-        or options.reads_infile.upper().endswith(".FASTA")
-        or options.reads_infile.upper().endswith(".FA")
-        or options.reads_infile.upper().endswith(".BAM")
+    def __init__(
+        self,
+        filename: str,
+        true_barcodes: Dict[str, Tuple[str, str]],
+        k: int,
+        metric: str,
+        slider_increment: int,
+        start_position: int,
+        pre_overhang: int,
+        post_overhang: int,
+        max_edit_distance: int,
+        homopolymer_filter: int,
+        ambiguity_factor: float,
+        no_offset_speedup: bool,
+        seed: int,
+        multiple_hits_keep_one: bool,
+        trim_sequences: List[Tuple[str, str]],
+        barcode_tag: str,
+        subprocesses: int,
+        output_reads: str,
+        output_matched: Optional[str] = None,
+        output_ambiguous: Optional[str] = None,
+        output_unmatched: Optional[str] = None,
+        output_results: Optional[str] = None,
+        chunk_size: int = 100,
     ):
-        raise ValueError(
-            "Invalid reads input file format: must be FASTQ, "
-            "FASTA, SAM or BAM format and file end with .fq, fastq, .fa, .fasta, .sam or .bam"
-        )
-    if options.outfile_prefix is None or options.outfile_prefix == "":
-        raise ValueError("Invalid output file prefix.")
-    if options.k <= 0:
-        raise ValueError("Invalid kmer length. Must be > 0.")
-    if options.max_edit_distance < 0:
-        raise ValueError("Invalid max edit distance. Must be >= 0.")
-    if options.metric not in ("Subglobal", "Levenshtein", "Hamming"):
-        raise ValueError("Invalid metric. Must be Subglobal, Levenshtein or Hamming.")
-    if options.slider_increment < 0:
-        raise ValueError("Invalid slider increment. Must be >= 0.")
-    if options.slider_increment == 0:
-        options.slider_increment = int(options.k)
-    if options.start_position < 0:
-        raise ValueError("Invalid start position. Must be >= 0.")
-    if options.overhang < 0:
-        raise ValueError("Invalid overhang. Must be >= 0.")
-    if options.metric == "Hamming" and options.overhang > 0:
-        raise ValueError("Invalid overhang. Must be 0 for Hamming metric.")
-    if options.subprocesses < 0:
-        raise ValueError("Invalid no. of subprocesses. Must be >= 0.")
-    if options.ambiguity_factor < 1.0:
-        raise ValueError("Invalid ambiguity factor. Must be >= 1.")
-    # Check the the trimming sequences given are valid
-    if (
-        options.trim_sequences is not None
-        and (len(options.trim_sequences) % 2 != 0 or min(options.trim_sequences)) < 0
-    ):
-        raise ValueError(
-            "Invalid trimming sequences given "
-            "The number of positions given must be even and they must fit into the barcode length."
-        )
-    if options.barcode_tag:
-        if len(options.barcode_tag) != 2:
-            raise ValueError(
-                'Invalid the "--barcode-tag" option must specify a two-letter string, current length is '
-                + str(len(options.barcode_tag))
-                + ' letters ("'
-                + options.barcode_tag
-                + '").\n'
-            )
-        if not (
-            options.reads_infile.upper().endswith(".SAM")
-            or options.reads_infile.upper().endswith(".BAM")
-        ):
-            raise ValueError(
-                'Invalid the "--barcode-tag" option can only be used with SAM or BAM formatted input files.\n'
-            )
+        """
+        Initializes the FileProcessor.
+        """
+        self.filename = filename
+        self.true_barcodes = true_barcodes
+        self.k = k
+        self.metric = metric
+        self.slider_increment = slider_increment
+        self.start_position = start_position
+        self.pre_overhang = pre_overhang
+        self.post_overhang = post_overhang
+        self.max_edit_distance = max_edit_distance
+        self.homopolymer_filter = homopolymer_filter
+        self.ambiguity_factor = ambiguity_factor
+        self.no_offset_speedup = no_offset_speedup
+        self.seed = seed
+        self.multiple_hits_keep_one = multiple_hits_keep_one
+        self.trim_sequences = trim_sequences
+        self.barcode_tag = barcode_tag
+        self.subprocesses = subprocesses
+        self.output_reads = output_reads
+        self.output_matched = output_matched
+        self.output_ambiguous = output_ambiguous
+        self.output_unmatched = output_unmatched
+        self.output_results = output_results
+        self.chunk_size = chunk_size
+        self.write_queue = queue.Queue()  # Thread-safe queue for writing
+        self.stop_signal = None  # Signal to stop the writer thread
+        self.stats = Statistics()
+        # Adjust the barcode length and the overhang if
+        # we want to trim away helpers from the barcode
+        self.barcode_length = len(list(true_barcodes.keys())[0])
+        if trim_sequences is not None:
+            for start, end in trim_sequences:
+                self.barcode_length += end - start
+        # Create k-mer mappings with ALL kmers
+        self.kmer2seq = get_kmers_dicts(list(self.true_barcodes_.keys()), self.k, False)
+        # define metric choice
+        if self.metric == "Subglobal":
+            self.metric_choice = SUBGLOBAL
+        elif self.metric == "Levenshtein":
+            self.metric_choice = LEVENSHTEIN
+        else:
+            self.metric_choice = HAMMING
 
-    # Read barcodes file
-    true_barcodes = bu.read_barcode_file(options.barcodes_infile)
+    def _process_chunk(self, chunk: List[Any]) -> None:
+        """
+        Processes a single chunk using the Cython function and adds results to the queue.
 
-    # Paths
-    frmt = options.reads_infile.split(".")[-1]
-    fn_bc = os.path.abspath(options.barcodes_infile)
-    fn_reads = os.path.abspath(options.reads_infile)
-    fn_prefix = os.path.abspath(options.outfile_prefix)
-    fn_matched = None if options.no_matched_output else fn_prefix + "_matched." + frmt
-    fn_ambig = None if options.no_ambiguous_output else fn_prefix + "_ambiguous." + frmt
-    fn_unmatched = (
-        None if options.no_unmatched_output else fn_prefix + "_unmatched." + frmt
-    )
-    fn_results = None if options.no_results_output else fn_prefix + "_results.tsv"
+        Args:
+            chunk: A chunk of file records.
+        """
+        for record in chunk:
+            matches = demultiplex_record(record, **self.options)
+            # Iterate over all matches (only more than one if ambiguous)
+            for match in matches:
+                self.write_queue.put((match, record))
 
-    # Subprocesses
-    if options.subprocesses == 0:
-        options.subprocesses = mp.cpu_count() - 1
+    def _writer_thread(self) -> None:
+        """
+        A thread that writes results from the queue to appropriate files.
+        """
+        while True:
+            item = self.write_queue.get()
+            if item == self.stop_signal:  # Stop signal
+                break
+            match, record = item
+            self.stats.total_reads += 1
+            # Write to results file.
+            if self.output_results is not None:
+                self.writers["output_results"].write(f"{match}\n")
+            # No match.
+            if match.match_type == match.UNMATCHED:
+                if self.output_unmatched is not None:
+                    self.writers["output_unmatched"].write(record)
+                    self.stats.total_reads_wr += 1
+                self.stats.unmatched += 1
+                continue
+            # Append record with properties. B0:Z:Barcode, B1:Z:Prop1, B2:Z:prop3 ...
+            bc = self.true_barcodes[match.barcode]
+            tags = list()
+            # To avoid duplicated B0 tag when input is BAM/SAM we set instead of add
+            tags.append(("B0:Z", match.barcode))
+            for j in range(len(bc.attributes)):
+                tags.append((f"B{j+1}:Z", bc.attributes[j]))
+            record.add_tags(tags)
+            # Write to output file.
+            if match.match_type == match.MATCHED_PERFECTLY:
+                if self.output_reads is not None:
+                    self.writers["output_reads"].write(record)
+                    self.stats.total_reads_wr += 1
+                self.stats.perfect_matches += 1
+                self.stats.edit_distance_counts[0] += 1
+            elif match.match_type == match.MATCHED_UNAMBIGUOUSLY:
+                if self.output_matched is not None:
+                    self.writers["output_matched"].write(record)
+                self.stats.imperfect_unambiguous_matches += 1
+                self.stats.edit_distance_counts[match.edit_distance] += 1
+            elif match.match_type == match.MATCHED_AMBIGUOUSLY:
+                if self.output_ambiguous is not None:
+                    self.writers["output_ambiguous"].write(record)
+                self.stats.imperfect_ambiguous_matches += 1
+            else:
+                raise ValueError(f"Invalid match type {match.match_type}")
 
-    print("# Options: " + str(options).split("Namespace")[-1])
-    print("# Barcodes input file: " + str(fn_bc))
-    print("# Reads input file: " + str(fn_reads))
-    print("# Matched output file: " + str(fn_matched))
-    print("# Ambiguous output file: " + str(fn_ambig))
-    print("# Unmatched output file: " + str(fn_unmatched))
-    print("# Results output file: " + str(fn_results))
-    print("# Number of barcodes in input: " + str(len(true_barcodes)))
-    lngth = len(list(true_barcodes.keys())[0])
-    print("# Barcode length: " + str(lngth))
-    print(
-        "# Barcode length when overhang added: "
-        + str(lngth + min(options.start_position, options.overhang) + options.overhang)
-    )
+    def run(self) -> None:
+        """
+        Processes the input file in chunks and writes results to different files based on the output category.
 
-    # Check barcodes file.
-    if options.estimate_min_edit_distance > 0:
-        min_dist = bu.estimate_min_edit_distance(
-            true_barcodes, options.estimate_min_edit_distance
-        )
-        if min_dist <= options.max_edit_distance:
-            raise ValueError(
-                "Invalid max edit distance: exceeds or equal "
-                "to estimated minimum edit distance among true barcodes."
-            )
-        print(
-            "# Estimate of minimum edit distance between true barcodes (may be less): "
-            + str(min_dist)
-        )
-    else:
-        print(
-            "# Estimate of minimum edit distance between true barcodes (may be less): Not estimated"
-        )
+        Args:
+            output_dir (str): Directory where output files will be written.
+        """
+        start_time = time.time()
 
-    # Make the input trim coordinates a list of tuples
-    trim_sequences = None
-    if options.trim_sequences is not None:
-        trim_sequences = list()
-        for i in range(len(options.trim_sequences) - 1):
-            if i % 2 == 0:
-                trim_sequences.append(
-                    (options.trim_sequences[i], options.trim_sequences[i + 1])
-                )
+        # Prepare writers for each output category
+        writers = {
+            "category1": dnaio.open(
+                os.path.join(output_dir, "category1.fasta"), mode="w"
+            ),
+            "category2": dnaio.open(
+                os.path.join(output_dir, "category2.fasta"), mode="w"
+            ),
+            # Add more categories as needed
+        }
 
-    # Initialize main components
-    sub.init(
-        true_barcodes,
-        options.start_position,
-        min(options.start_position, options.overhang),
-        options.overhang,
-        options.max_edit_distance,
-        options.homopolymer_filter,
-        options.seed,
-        options.multiple_hits_keep_one,
-        trim_sequences,
-        options.barcode_tag,
-    )
+        writer_thread = threading.Thread(target=self._writer_thread, args=(writers,))
+        writer_thread.start()
 
-    srch.init(
-        true_barcodes,
-        options.k,
-        options.max_edit_distance,
-        options.metric,
-        options.slider_increment,
-        min(options.start_position, options.overhang),
-        options.overhang,
-        options.ambiguity_factor,
-        options.no_offset_speedup,
-    )
+        try:
+            with ThreadPoolExecutor(max_workers=self.num_processes) as executor:
+                futures = []
+                current_chunk = []
+                reader = self._get_reader()
 
-    # Demultiplex
-    print("# Starting demultiplexing...")
-    stats = core.demultiplex(
-        fn_reads, fn_matched, fn_ambig, fn_unmatched, fn_results, options.subprocesses
-    )
-    print("# ...finished demultiplexing")
-    print("# Wall time in secs: " + str(time.time() - start_time))
-    print(str(stats))
+                # Read the file and divide it into chunks
+                for record in reader:
+                    current_chunk.append(record)
+                    if len(current_chunk) == self.chunk_size:
+                        futures.append(
+                            executor.submit(self._process_chunk, current_chunk)
+                        )
+                        current_chunk = []
+
+                # Process any remaining records
+                if current_chunk:
+                    futures.append(executor.submit(self._process_chunk, current_chunk))
+
+                # Ensure all tasks complete
+                for future in futures:
+                    future.result()
+
+            # Send stop signal to writer thread
+            self.write_queue.put(self.stop_signal)
+            writer_thread.join()
+        finally:
+            # Close all writers
+            for writer in writers.values():
+                writer.close()
+        self.stats.time = time.time() - start_time

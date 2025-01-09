@@ -4,20 +4,26 @@
 """
 Contains utilities for working with k-mer chunks of the barcodes or other sequences.
 """
-cimport cython 
+cimport cython
 from cpython cimport bool
 from collections import defaultdict
 
 cdef object get_kmers_dicts(list seqs, int k, bool round_robin=False, int slider_increment=1):
     """
-    Returns dictionaries for kmers of a list of sequences.
-    The last kmer is always included, irrespective of slider increment.
-    :param seqs: the sequences.
-    :param k: the k-mer length.
-    :param round_robin: if to treat the sequence as circular.
-    :param slider_increment determines how the kmers are obtained
-    :returns: a dictionary: kmer -> dictionary of seqs holding kmer -> 
-    list of offsets of kmer in seq
+    Generates dictionaries for k-mers of a list of sequences.
+
+    The last k-mer is always included, irrespective of the slider increment.
+
+    Args:
+        seqs (List[str]): The input sequences.
+        k (int): The k-mer length.
+        round_robin (bool): Whether to treat the sequences as circular.
+        slider_increment (int): The step size for sliding the k-mer window.
+
+    Returns:
+        Dict[str, Dict[str, List[int]]]: A dictionary where:
+            - The keys are k-mers.
+            - The values are dictionaries mapping sequences to lists of k-mer offsets.
     """
     cdef object kmer2seq = defaultdict(lambda : defaultdict(list))
     cdef str seq
@@ -35,20 +41,26 @@ cdef object get_kmers_dicts(list seqs, int k, bool round_robin=False, int slider
         if len(seqq) % slider_increment != 0:
             i = len(seqq)-k
             kmer = seqq[i:len(seqq)]
-            kmer2seq[kmer][seq].add(i)       
+            kmer2seq[kmer][seq].add(i)
     # Important to be able to generate KeyError
     kmer2seq.default_factory = None
     return kmer2seq
 
 cdef list get_kmers(str seq, int k, bool round_robin=False, int slider_increment=0):
     """
-    Returns the kmers of a sequence as a list of kmer-offset tuples. 
-    The last kmer will always be included irrespective of the slider increment.
-    :param seq: sequence.
-    :param k: kmer length.
-    :param round_robin: if to treat the sequence as circular.
-    :param slider_increment determines how the kmers are obtained
-    :return: the kmers list (kmer, offset).
+    Generates the k-mers of a sequence as a list of k-mer and offset tuples.
+
+    The last k-mer is always included, irrespective of the slider increment.
+
+    Args:
+        seq (str): The input sequence.
+        k (int): The k-mer length.
+        round_robin (bool): Whether to treat the sequence as circular.
+        slider_increment (int): The step size for sliding the k-mer window.
+
+    Returns:
+        List[Tuple[str, int]]: A list of tuples where each tuple contains a k-mer
+        and its offset in the sequence.
     """
     cdef list kmer_list = list()
     cdef str seqq = seq + seq[0:(k-1)] if round_robin else seq

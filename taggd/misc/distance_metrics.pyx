@@ -1,7 +1,7 @@
 # cython: boundscheck=False
 # cython: cdivision=True
 # cython: wraparound=False
-""" 
+"""
 Some functions to compute distance
 between sequences
 """
@@ -11,11 +11,16 @@ import numpy as np
 
 cdef int hamming_distance(str seq1, str seq2, int limit=0):
     """
-    Returns the Hamming distance between equal-length sequences.
-    :param seq1: first sequence.
-    :param seq2: second sequence.
-    :param limit: max distance limit before aborting (returning limit + 1).
-    :return: the edit distance.
+    Calculates the Hamming distance between two equal-length sequences.
+
+    Args:
+        seq1 (str): The first sequence.
+        seq2 (str): The second sequence.
+        limit (int): The maximum distance limit. If the distance exceeds this limit,
+            the calculation aborts and returns `limit + 1`.
+
+    Returns:
+        int: The Hamming distance between the sequences, or `limit + 1` if the limit is exceeded.
     """
     cdef int i = 0
     cdef int sum = 0
@@ -28,12 +33,19 @@ cdef int hamming_distance(str seq1, str seq2, int limit=0):
 
 cdef int levenshtein_distance(str seq1, str seq2, int limit=0):
     """
-    Returns the Levenshtein distance between two sequences. 
-    Lengths do no need to be equal, as indels are allowed.
-    :param seq1: first sequence.
-    :param seq2: second sequence.
-    :param limit: max distance limit before aborting (returning limit + 1).
-    :return: the edit distance.
+    Calculates the Levenshtein distance between two sequences.
+
+    The Levenshtein distance allows for substitutions, insertions, and deletions.
+    The sequences do not need to have equal lengths.
+
+    Args:
+        seq1 (str): The first sequence.
+        seq2 (str): The second sequence.
+        limit (int): The maximum distance limit. If the calculated distance exceeds
+            this limit, the calculation aborts and returns `limit + 1`.
+
+    Returns:
+        int: The Levenshtein distance between the sequences, or `limit + 1` if the limit is exceeded.
     """
     cdef list one_ago = None
     cdef list this_row = range(1, len(seq2) + 1) + [0]
@@ -56,14 +68,18 @@ cdef int levenshtein_distance(str seq1, str seq2, int limit=0):
 
 cdef int subglobal_distance(str s1, str s2):
     """
-    Computes the edit distance for a sub-global alignment
-    of a sequence s2 against a sequence s1.
-    Mismatches and indels both score as 1. Overhanging parts of s1 do not count.
-    :param s1: the longer (probe) sequence.
-    :param s2: the shorter sought sequence.
-    :return: the minimum edit distance
-    """
+    Calculates the edit distance for a sub-global alignment of two sequences.
 
+    The sub-global alignment computes the edit distance of `s2` aligned against `s1`,
+    where mismatches and indels both score as 1. Overhanging parts of `s1` are not included in the distance calculation.
+
+    Args:
+        s1 (str): The longer sequence (probe).
+        s2 (str): The shorter sequence (query).
+
+    Returns:
+        int: The minimum edit distance for aligning `s2` to `s1`.
+    """
     cdef int xLen = len(s1)
     cdef int yLen = len(s2)
     if xLen < yLen:
@@ -72,6 +88,7 @@ cdef int subglobal_distance(str s1, str s2):
     cdef int x
     cdef int y
     cdef np.ndarray[np.uint32_t, ndim=2] d = np.empty([xLen+1, yLen+1], dtype=np.uint32)
+
     # Initialize array
     for x in xrange(0, xLen+1):
         d[x,0] = 0
@@ -84,7 +101,7 @@ cdef int subglobal_distance(str s1, str s2):
         for y in xrange(1, yLen+1):
             d[x,y] = min( min(d[x-1,y]+1, d[x,y-1]+1), d[x-1,y-1] + int(s1[x-1] != s2[y-1]) )
 
-    # Find min for sub-global alignment so that all of s2 is covered, 
+    # Find min for sub-global alignment so that all of s2 is covered,
     # but not necessarily all of s1 sequence.
     cdef int mini = 1000000
     cdef int iPos = 0
@@ -95,5 +112,6 @@ cdef int subglobal_distance(str s1, str s2):
             mini = d[i,yLen]
             iPos = i
         i -= 1
+
     # Return min distance
     return mini
