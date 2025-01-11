@@ -36,3 +36,10 @@
           files using a barcode sequence from a tag field.
 0.3.3   - Buf fixes relatesd to BAM input.
 0.3.5   - Python 3 support
+0.4.0   - Refactor the whole codebase
+        - Add --chunk-size argument
+        - Use Google docstrings and typing hints
+        - Add github actions and pre-commit hooks
+        - Update the building scripts and the documentation
+        - Add test for full coverage
+        - Update all dependencies and add support to modern Python

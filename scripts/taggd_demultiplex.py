@@ -139,7 +139,7 @@ def parse_arguments(argv=None):
         type=int,
         help="Excludes reads where the barcode contains a homopolymer of the given length. "
         "0 means no filter (default: %(default)d).",
-        default=8,
+        default=0,
         metavar="INT",
     )
     parser.add_argument(
@@ -188,9 +188,16 @@ def parse_arguments(argv=None):
         metavar="STRING",
     )
     parser.add_argument(
+        "--chunk-size",
+        type=int,
+        help="The chunk size (number of reads) for parallel processing (default: %(default)d).",
+        default=10000,
+        metavar="INT",
+    )
+    parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.3.7",
+        version="%(prog)s 0.4.0",
     )
 
     return parser.parse_args(argv)
@@ -328,6 +335,11 @@ def validate_arguments(options):
             "--no-unmatched-output, --no-results-output). At least one output must be enabled."
         )
 
+    if options.chunk_size < 100:
+        raise ValueError(
+            "Chunk size (--chunk-size) must be 100 or greater to avoid excessive overhead."
+        )
+
 
 def main(argv=None):
     """
@@ -427,6 +439,7 @@ def main(argv=None):
         fn_ambig,
         fn_unmatched,
         fn_results,
+        options.chunk_size,
     )
     demux.run()
     print("# ...finished demultiplexing")

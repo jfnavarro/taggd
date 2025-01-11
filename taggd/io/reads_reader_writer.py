@@ -33,20 +33,23 @@ class ReadsReaderWriter:
 
         # Determine file type based on file extension
         suffix = os.path.splitext(self.infile_name)[1].lower()
+        sam_bam_mode = None
         if suffix in [".fa", ".fasta"]:
             self.file_type = self.FASTA
         elif suffix in [".fq", ".fastq"]:
             self.file_type = self.FASTQ
         elif suffix == ".sam":
             self.file_type = self.SAM
+            sam_bam_mode = "r"
         elif suffix == ".bam":
             self.file_type = self.BAM
+            sam_bam_mode = "rb"
         else:
             raise ValueError("Unsupported reads file format!")
 
         # Read header for SAM/BAM files
-        if self.file_type in {self.SAM, self.BAM}:
-            with pysam.AlignmentFile(self.infile_name, "r") as infile:
+        if sam_bam_mode is not None:
+            with pysam.AlignmentFile(self.infile_name, sam_bam_mode) as infile:  # type: ignore
                 self.infile_header = infile.header
 
     def reader_open(

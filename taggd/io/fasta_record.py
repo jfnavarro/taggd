@@ -12,16 +12,16 @@ class FASTARecord(Record):
     Holds a FASTA record.
     """
 
-    def __init__(self, header: str, sequence: str):
+    def __init__(self, annotation: str, sequence: str):
         """
         Initializes a FASTARecord from its main attributes.
 
         Args:
-            header: The FASTA header.
+            heaannotationder: The FASTA header.
             sequence: The FASTA sequence.
         """
         super().__init__()
-        self.header = header  # type: ignore
+        self.annotation = annotation  # type: ignore
         self.sequence = sequence  # type: ignore
         self.taggdtags = ""  # type: ignore
 
@@ -41,7 +41,7 @@ class FASTARecord(Record):
         Returns:
             The FASTA record with tags included in the annotation.
         """
-        return SequenceRecord(f"{self.header} {self.taggdtags}", self.sequence)  # type: ignore
+        return SequenceRecord(f"{self.annotation} {self.taggdtags}", self.sequence)  # type: ignore
 
     def __str__(self) -> str:
         """
@@ -51,4 +51,4 @@ class FASTARecord(Record):
             The FASTA record as a formatted string.
         """
         fa_format = ">{header_comments}\n{sequence}\n"
-        return fa_format.format(header_comments=self.header, sequence=self.sequence)
+        return fa_format.format(header_comments=self.annotation, sequence=self.sequence)

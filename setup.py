@@ -1,7 +1,6 @@
 from setuptools import setup, find_packages, Extension  # type: ignore
 from Cython.Build import cythonize  # type: ignore
 import numpy as np
-from glob import glob
 
 # Define Cython extensions
 extensions = [
@@ -20,7 +19,7 @@ extensions = [
 
 setup(
     name="taggd",
-    version="0.3.7",
+    version="0.4.0",
     author="Joel Sjostrand, Jose Fernandez",
     author_email="joel.sjostrand@scilifelab.se, jc.fernandez.navarro@gmail.com",
     license="BSD-3-Clause",
@@ -28,9 +27,13 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/jfnavarro/taggd",
-    download_url="https://github.com/jfnavarro/taggd/0.3.7",
-    scripts=glob("scripts/*.py"),
-    packages=find_packages(include=["taggd", "taggd.*"]),
+    download_url="https://github.com/jfnavarro/taggd/0.4.0",
+    packages=find_packages(),
+    entry_points={
+        "console_scripts": [
+            "taggd_demultiplex=scripts.taggd.demultiplex:main",
+        ],
+    },
     setup_requires=["cython", "numpy"],
     install_requires=["setuptools", "pysam", "numpy", "dnaio"],
     python_requires=">=3.10",

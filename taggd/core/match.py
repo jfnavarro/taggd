@@ -43,15 +43,19 @@ class Match:
     barcode, and edit distance.
     """
 
-    def __init__(self, match_type: int, barcode: str, edit_distance: int = 1) -> None:
+    def __init__(
+        self, annotation: str, match_type: int, barcode: str, edit_distance: int = 1
+    ) -> None:
         """
         Initializes a Match instance.
 
         Args:
+            annotation: The read name.
             match_type: The type of the match (e.g., MATCHED_PERFECTLY, UNMATCHED).
             barcode: The barcode associated with the match.
             edit_distance: The edit distance of the match. Defaults to 1.
         """
+        self.annoation = annotation
         self.match_type = match_type
         self.barcode = barcode
         self.edit_distance = edit_distance
@@ -64,6 +68,7 @@ class Match:
             The string representation of the match in tab-separated format.
         """
         return (
+            f"{self.annoation}\t"
             f"{match_type_to_str(self.match_type)}\t"
             f"{self.barcode}\t"
             f"{self.edit_distance}"

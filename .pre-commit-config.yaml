@@ -5,16 +5,16 @@ repos:
   - id: forbid-crlf
   - id: remove-crlf
   - id: forbid-tabs
-    exclude_types: [csv, tsv]
-    exclude: makefile
+    exclude: ^.*\.(csv|tsv|sam|fa|fq|bam)$
   - id: remove-tabs
-    exclude_types: [csv, tsv]
-    exclude: makefile
+    exclude: ^.*\.(csv|tsv|sam|fa|fq|bam)$
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.1.0
   hooks:
   - id: trailing-whitespace
+    exclude: ^.*\.(csv|tsv|sam|fa|fq|bam)$
   - id: end-of-file-fixer
+    exclude: ^.*\.(csv|tsv|sam|fa|fq|bam)$
   - id: check-merge-conflict
   - id: pretty-format-json
     args: [--autofix]

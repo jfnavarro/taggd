@@ -40,12 +40,11 @@ class DemultipleReads:
         trim_sequences: List[Tuple[int, int]],
         barcode_tag: str,
         subprocesses: int,
-        output_reads: str,
         output_matched: Optional[str] = None,
         output_ambiguous: Optional[str] = None,
         output_unmatched: Optional[str] = None,
         output_results: Optional[str] = None,
-        chunk_size: int = 1000,
+        chunk_size: int = 10000,
     ):
         """
         Initializes the DemultipleReads class.
@@ -71,7 +70,6 @@ class DemultipleReads:
         self.trim_sequences = trim_sequences
         self.barcode_tag = barcode_tag
         self.subprocesses = subprocesses
-        self.output_reads = output_reads
         self.output_matched = output_matched
         self.output_ambiguous = output_ambiguous
         self.output_unmatched = output_unmatched
@@ -141,7 +139,7 @@ class DemultipleReads:
             self.stats.total_reads += 1
             # Write to results file.
             if self.output_results is not None:
-                writers["output_results"].write(f"{match}\n")
+                writers["output_results"].write(f"{str(match)}\n")
             # No match.
             if match.match_type == constants.UNMATCHED:
                 if self.output_unmatched is not None:
@@ -159,8 +157,8 @@ class DemultipleReads:
             record.add_tags(tags)
             # Write to output file.
             if match.match_type == constants.MATCHED_PERFECTLY:
-                if self.output_reads is not None:
-                    writers["output_reads"].write(record.unwrap())
+                if self.output_matched is not None:
+                    writers["output_matched"].write(record.unwrap())
                     self.stats.total_reads_wr += 1
                 self.stats.perfect_matches += 1
                 self.stats.edit_distance_counts[0] += 1
@@ -193,8 +191,6 @@ class DemultipleReads:
             writers["output_unmatched"] = self.reader_writter.get_writer(  # type: ignore
                 self.output_unmatched
             )
-        if self.output_reads:
-            writers["output_reads"] = self.reader_writter.get_writer(self.output_reads)  # type: ignore
         if self.output_matched:
             writers["output_matched"] = self.reader_writter.get_writer(  # type: ignore
                 self.output_matched
@@ -203,7 +199,6 @@ class DemultipleReads:
             writers["output_ambiguous"] = self.reader_writter.get_writer(  # type: ignore
                 self.output_ambiguous
             )
-
         writer_thread = threading.Thread(target=self._writer_thread, args=(writers,))
         writer_thread.start()
 

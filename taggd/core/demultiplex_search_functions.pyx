@@ -57,7 +57,7 @@ cdef list get_candidates(
             hits = kmer2seq[kmer]
         except KeyError:
             continue
-        # For each true barcode containing read's kmer.
+        # For each true barcode containing the read's kmer.
         # Hit refers to barcode and hit_offsets to where the kmer was in the barcode
         for hit, hit_offsets in list(hits.items()):
             if no_offset_speedup:
@@ -85,13 +85,17 @@ cdef list get_candidates(
 
 cdef list get_distances(str read_barcode, list candidates, int metric_choice, int max_edit_distance):
     """
-    Returns all qualified hits ordered by distance as
-    a list of tuples, (barcode,distance).
-    :param read_barcode the original barcode
-    :param candidates a list of possible candidates
-    :param metric_choice the metric to use for distance calculation
-    :param max_edit_distance the maximum edit distance allowed
-    :return a list of (candidate, distance score)
+    Returns all qualified hits ordered by distance.
+
+    Args:
+        read_barcode: The original barcode to compare against candidates.
+        candidates: A list of possible candidate barcodes.
+        metric_choice: The metric to use for distance calculation.
+        max_edit_distance: The maximum edit distance allowed.
+
+    Returns:
+        A list of tuples where each tuple contains a candidate barcode
+        and its corresponding distance score.
     """
     cdef list qual_hits = []
     cdef int dist = 0
@@ -119,10 +123,15 @@ cdef list get_distances(str read_barcode, list candidates, int metric_choice, in
 
 cdef list get_top_hits(list qual_hits, float ambiguity_factor):
     """
-    Returns the top hits candidates filtering by minimum distance.
-    :param qual_hits the list of possible candidate tuples (barcode,distance)
-    :param ambiguity_facor the factor to multiply the minimum distance
-    :return the filtered list
+    Returns the top hit candidates filtered by minimum distance.
+
+    Args:
+        qual_hits: A list of candidate tuples, where each tuple contains
+            a barcode and its corresponding distance.
+        ambiguity_factor: The factor used to multiply the minimum distance for filtering.
+
+    Returns:
+        A filtered list of candidate tuples that meet the minimum distance criteria.
     """
     if len(qual_hits) == 0:
         return None
@@ -131,3 +140,23 @@ cdef list get_top_hits(list qual_hits, float ambiguity_factor):
     cdef int mini = round(sorted_qual_hits[0][1] * ambiguity_factor)
     # Filter out elements with similar or lower distance than the min*ambiguity_factor
     return [candidate for candidate in qual_hits if candidate[1] <= mini]
+
+# Wrappers to make testing easy
+cpdef list py_get_candidates(
+    str read_barcode,
+    int k,
+    int slider_increment,
+    object kmer2seq,
+    bool no_offset_speedup,
+    int pre_overhang,
+    int post_overhang,
+    int max_edit_distance
+):
+    return get_candidates(read_barcode, k, slider_increment, kmer2seq,
+                          no_offset_speedup, pre_overhang, post_overhang, max_edit_distance)
+
+cpdef list py_get_distances(str read_barcode, list candidates, int metric_choice, int max_edit_distance):
+    return get_distances(read_barcode, candidates, metric_choice, max_edit_distance)
+
+cpdef list py_get_top_hits(list qual_hits, float ambiguity_factor):
+    return get_top_hits(qual_hits, ambiguity_factor)

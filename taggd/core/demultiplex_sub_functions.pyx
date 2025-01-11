@@ -23,6 +23,9 @@ cdef str trim_helpers(str seq, list trim_sequences):
         prev_end = end
     return seq
 
+cpdef str py_trim_helpers(str seq, list trim_sequences):
+    return trim_helpers(seq, trim_sequences)
+
 cpdef list demultiplex_record(
     object rec,
     str barcode_tag,
@@ -50,6 +53,8 @@ cpdef list demultiplex_record(
     cdef str bcseq = None
     cdef int dist = 0
     cdef str read_barcode
+    cdef str annotation = rec.annotation
+    cdef str sequence
 
     # Try perfect hit first.
     if barcode_tag is None:
@@ -59,17 +64,18 @@ cpdef list demultiplex_record(
             sequence = {tag: value for tag, value in rec.attributes["tags"]}[barcode_tag]
         except KeyError:
             raise ValueError(f"The specified SAM/BAM tag {barcode_tag} is not present for record {rec.annotation}")
-    read_barcode = sequence[start_position:(start_position+barcode_length)]
+    read_barcode = sequence[start_position:start_position+barcode_length]
+
     if trim_sequences is not None:
         read_barcode = trim_helpers(read_barcode, trim_sequences)
 
     if read_barcode in true_barcodes:
-        return [match.Match(constants.MATCHED_PERFECTLY, read_barcode, 0)]
+        return [match.Match(annotation, constants.MATCHED_PERFECTLY, read_barcode, 0)]
 
     # Homopolymer filter.
     for filter in homopolymers:
         if filter in read_barcode:
-            return [match.Match(constants.UNMATCHED, "-", -1)]
+            return [match.Match(annotation, constants.UNMATCHED, "-", -1)]
 
     # Include overhang.
     if pre_overhang != 0 or post_overhang != 0:
@@ -93,13 +99,13 @@ cpdef list demultiplex_record(
 
     if not top_hits:
         # UNMATCHED
-        return [match.Match(constants.UNMATCHED, "-", -1)]
+        return [match.Match(annotation, constants.UNMATCHED, "-", -1)]
 
-    random.shuffle(top_hits)
     if len(top_hits) == 1 or multiple_hits_keep_one:
         # Unambiguous match
         bcseq, dist = top_hits[0]
-        return [match.Match(constants.MATCHED_UNAMBIGUOUSLY, bcseq, dist)]
+        return [match.Match(annotation, constants.MATCHED_UNAMBIGUOUSLY, bcseq, dist)]
 
     # Add the rest as ambiguous match
-    return [match.Match(constants.MATCHED_AMBIGUOUSLY, bcseq, dist) for bcseq, dist in top_hits]
+    random.shuffle(top_hits)
+    return [match.Match(annotation, constants.MATCHED_AMBIGUOUSLY, bcseq, dist) for bcseq, dist in top_hits]

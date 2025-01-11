@@ -12,17 +12,17 @@ class FASTQRecord(Record):
     Holds a FASTQ record.
     """
 
-    def __init__(self, header: str, sequence: str, qualities: str):
+    def __init__(self, annotation: str, sequence: str, qualities: str):
         """
         Initializes a FASTQRecord from the main attributes.
 
         Args:
-            header: The FASTQ header.
+            annotation: The FASTQ header.
             sequence: The FASTQ sequence.
             qualities: The FASTQ qualities.
         """
         super().__init__()
-        self.header = header  # type: ignore
+        self.annotation = annotation  # type: ignore
         self.sequence = sequence  # type: ignore
         self.qualities = qualities  # type: ignore
         self.taggdtags = ""
@@ -44,7 +44,7 @@ class FASTQRecord(Record):
             The FASTQ record with tags included in the header.
         """
         return SequenceRecord(
-            f"{self.header} {self.taggdtags}",  # type: ignore
+            f"{self.annotation} {self.taggdtags}",  # type: ignore
             self.sequence,  # type: ignore
             self.qualities,  # type: ignore
         )

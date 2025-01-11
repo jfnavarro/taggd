@@ -1,187 +1,112 @@
-#! /usr/bin/env python
-"""
-Unit-test for run-tests
-"""
-
-import unittest
-import tempfile
 import os
+import tempfile
 import filecmp
 import time
 import subprocess
+import pytest
 
 
-class TestDemultiplexer(unittest.TestCase):
-    @classmethod
-    def setUpClass(self):
-        # Obtain paths and files.
-        self.testdir = str(os.path.abspath(os.path.dirname(os.path.realpath(__file__))))
-        self.inbarcodes = os.path.join(self.testdir, "testbarcodes.tsv")
-        self.insam = os.path.join(self.testdir, "testset.sam")
-        self.inbam = os.path.join(self.testdir, "testset.bam")
-        self.infq = os.path.join(self.testdir, "testset.fq")
-        self.infa = os.path.join(self.testdir, "testset.fa")
-        assert os.path.exists(self.inbarcodes)
-        assert os.path.exists(self.insam)
-        assert os.path.exists(self.inbam)
-        assert os.path.exists(self.infq)
-        assert os.path.exists(self.infa)
+@pytest.fixture(scope="module")
+def test_data():
+    testdir = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
+    data = {
+        "testdir": testdir,
+        "inbarcodes": os.path.join(testdir, "data", "testbarcodes.tsv"),
+        "insam": os.path.join(testdir, "data", "testset.sam"),
+        "inbam": os.path.join(testdir, "data", "testset.bam"),
+        "infq": os.path.join(testdir, "data", "testset.fq"),
+        "infa": os.path.join(testdir, "data", "testset.fa"),
+    }
+    for key, filepath in data.items():
+        if key != "testdir":
+            assert os.path.exists(filepath), f"{filepath} does not exist"
+    return data
 
-    def test_normal_sam_run(self):
-        """
-        Tests taggd demultiplexer on a variety of small files.
-        """
 
-        outdir = tempfile.mkdtemp(prefix="taggd_demultiplex_test_out_sam_")
-        print("# Demultiplexer test output directory: " + outdir)
+def compare_to_expected_results(suffix, filename, file_description, outdir, testdir):
+    filepath_from_test = os.path.join(outdir, filename)
+    expected_result_dir = os.path.join(testdir, "expected_results", suffix)
+    expected_result_filepath = os.path.join(expected_result_dir, filename)
 
-        args = [
-            "taggd_demultiplex.py",
-            "--k",
-            "7",
-            "--max-edit-distance",
-            "7",
-            "--overhang",
-            "2",
-            "--subprocesses",
-            "3",
-            "--seed",
-            "dsfiogwhgfsaeadsgfADSgsagaagd",
-        ]
-        args += [self.inbarcodes, self.insam, os.path.join(outdir, "outfile")]
+    assert os.path.exists(
+        expected_result_filepath
+    ), f"{expected_result_filepath} does not exist"
+    assert os.path.exists(filepath_from_test), f"{file_description} does not exist"
 
-        # Start the demultiplexer
-        try:
-            print("\n# Running SAM test with parameters: " + " ".join(args))
-            subprocess.check_call(args)
-            self.validate_output_data("Normal SAM test", "sam", outdir)
-        except Exception as e:
-            print(e)
-            self.assertTrue(0, "Running Normal SAM test failed\n")
+    comp = filecmp.cmp(filepath_from_test, expected_result_filepath, shallow=False)
+    assert comp, f"{file_description} does not match the expected contents"
 
-    def test_normal_bam_run(self):
-        """
-        Tests taggd demultiplexer on a variety of small files.
-        """
-        outdir = tempfile.mkdtemp(prefix="taggd_demultiplex_test_out_bam_")
-        args = [
-            "taggd_demultiplex.py",
-            "--k",
-            "6",
-            "--max-edit-distance",
-            "5",
-            "--overhang",
-            "0",
-            "--subprocesses",
-            "3",
-            "--seed",
-            "dsfiogwhgfsaeadsgfADSgsagaagd",
-        ]
-        args += [self.inbarcodes, self.inbam, os.path.join(outdir, "outfile")]
 
-        # Start the demultiplexer
-        try:
-            print("\n# Running BAM test with parameters: " + " ".join(args))
-            subprocess.check_call(args)
-            self.validate_output_data("Normal BAM test", "bam", outdir)
-        except Exception as e:
-            print(e)
-            self.assertTrue(0, "Running Normal BAM test failed\n")
+def validate_output_data(expName, suffix, outdir, testdir):
+    print(f"# Validating test {expName}")
 
-    def test_normal_fq_run(self):
-        """
-        Tests taggd demultiplexer on a variety of small files.
-        """
-        outdir = tempfile.mkdtemp(prefix="taggd_demultiplex_test_out_fastq_")
-        args = [
-            "taggd_demultiplex.py",
-            "--k",
-            "4",
-            "--max-edit-distance",
-            "8",
-            "--overhang",
-            "3",
-            "--subprocesses",
-            "3",
-            "--seed",
-            "dsfiogwhgfsaeadsgfADSgsagaagd",
-        ]
-        args += [self.inbarcodes, self.infq, os.path.join(outdir, "outfile")]
+    # Verify existence of output files and temp files
+    assert os.listdir(outdir), "Output folder is empty"
 
-        # Start the demultiplexer
-        try:
-            print("\n# Running Fastq test with parameters: " + " ".join(args))
-            subprocess.check_call(args)
-            self.validate_output_data("Normal Fastq test", "fq", outdir)
-        except Exception as e:
-            print(e)
-            self.assertTrue(0, "Running Normal Fastq test failed\n")
+    time.sleep(2)
+    compare_to_expected_results(
+        suffix, f"outfile_matched.{suffix}", "Matched file", outdir, testdir
+    )
+    compare_to_expected_results(
+        suffix, f"outfile_unmatched.{suffix}", "Unmatched file", outdir, testdir
+    )
+    compare_to_expected_results(
+        suffix, f"outfile_ambiguous.{suffix}", "Ambiguous file", outdir, testdir
+    )
+    compare_to_expected_results(
+        suffix, "outfile_results.tsv", "Results file", outdir, testdir
+    )
 
-    def test_normal_fa_run(self):
-        """
-        Tests taggd demultiplexer on a variety of small files.
-        """
-        outdir = tempfile.mkdtemp(prefix="taggd_demultiplex_test_out_fasta_")
-        args = [
-            "taggd_demultiplex.py",
-            "--k",
-            "4",
-            "--max-edit-distance",
-            "8",
-            "--overhang",
-            "3",
-            "--subprocesses",
-            "3",
-            "--seed",
-            "dsfiogwhgfsaeadsgfADSgsagaagd",
-        ]
-        args += [self.inbarcodes, self.infa, os.path.join(outdir, "outfile")]
 
-        # Start the demultiplexer
-        try:
-            print("\n# Running Fasta test with parameters: " + " ".join(args))
-            subprocess.check_call(args)
-            self.validate_output_data("Normal Fasta test", "fa", outdir)
-        except Exception as e:
-            print(e)
-            self.assertTrue(0, "Running Normal Fasta test failed\n")
+def run_taggd_test(test_data, suffix, input_file, k, max_edit_distance, overhang):
+    outdir = tempfile.mkdtemp(prefix=f"taggd_demultiplex_test_out_{suffix}_")
+    args = [
+        "taggd_demultiplex",
+        "--k",
+        str(k),
+        "--max-edit-distance",
+        str(max_edit_distance),
+        "--overhang",
+        str(overhang),
+        "--subprocesses",
+        "3",
+        "--seed",
+        "dsfiogwhgfsaeadsgfADSgsagaagd",
+        test_data["inbarcodes"],
+        input_file,
+        os.path.join(outdir, "outfile"),
+    ]
 
-    def compare_to_expected_results(self, suffix, filename, file_description, outdir):
-        filepath_from_test = os.path.join(outdir, filename)
-        expected_result_dir = os.path.join(self.testdir, "expected_results")
-        # The value of the variable "suffix" is used here as a name for a subdirectory
-        expected_result_dir2 = os.path.join(expected_result_dir, suffix)
-        expected_result_filepath = os.path.join(expected_result_dir2, filename)
-        self.assertTrue(
-            os.path.exists(expected_result_filepath),
-            expected_result_filepath + " exists",
+    # Run the demultiplexer
+    try:
+        print(f"\n# Running {suffix.upper()} test with parameters: {' '.join(args)}")
+        subprocess.check_call(args)
+        validate_output_data(
+            f"Normal {suffix.upper()} test", suffix, outdir, test_data["testdir"]
         )
-        self.assertTrue(
-            os.path.exists(filepath_from_test), file_description + " exists"
-        )
-        comp = filecmp.cmp(filepath_from_test, expected_result_filepath, shallow=False)
-        self.assertTrue(comp, file_description + " has the expected contents")
-
-    def validate_output_data(self, expName, suffix, outdir):
-        print("# Validating test " + expName)
-
-        # Verify existence of output files and temp files
-        self.assertNotEqual(os.listdir(outdir), [], "Output folder is not empty")
-
-        time.sleep(2)
-        self.compare_to_expected_results(
-            suffix, "outfile_matched." + suffix, "Matched file", outdir
-        )
-        self.compare_to_expected_results(
-            suffix, "outfile_unmatched." + suffix, "Unmatched file", outdir
-        )
-        self.compare_to_expected_results(
-            suffix, "outfile_ambiguous." + suffix, "Ambiguous file", outdir
-        )
-        self.compare_to_expected_results(
-            suffix, "outfile_results.tsv", "Results file", outdir
-        )
+    except subprocess.CalledProcessError as e:
+        pytest.fail(f"Running {suffix.upper()} test failed: {e}")
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_normal_sam_run(test_data):
+    run_taggd_test(
+        test_data, "sam", test_data["insam"], k=7, max_edit_distance=7, overhang=2
+    )
+
+
+def test_normal_bam_run(test_data):
+    run_taggd_test(
+        test_data, "bam", test_data["inbam"], k=6, max_edit_distance=5, overhang=0
+    )
+
+
+def test_normal_fq_run(test_data):
+    run_taggd_test(
+        test_data, "fq", test_data["infq"], k=4, max_edit_distance=8, overhang=3
+    )
+
+
+def test_normal_fa_run(test_data):
+    run_taggd_test(
+        test_data, "fa", test_data["infa"], k=4, max_edit_distance=8, overhang=3
+    )
