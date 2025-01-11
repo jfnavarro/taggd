@@ -28,10 +28,10 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/jfnavarro/taggd",
     download_url="https://github.com/jfnavarro/taggd/0.4.0",
-    packages=find_packages(),
+    packages=find_packages(include=["scripts", "scripts.*", "taggd", "taggd.*"]),
     entry_points={
         "console_scripts": [
-            "taggd_demultiplex=scripts.taggd.demultiplex:main",
+            "taggd_demultiplex=scripts.taggd_demultiplex:main",
         ],
     },
     setup_requires=["cython", "numpy"],
