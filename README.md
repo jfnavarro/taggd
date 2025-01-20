@@ -27,10 +27,12 @@ Users can even create fake spatial coordinates (X, Y) for general-purpose demult
 
 ## Requirements
 
-- Python 3.10 or higher
-- Cython
-- PySam
-- NumPy
+- python 3.10 or higher
+- cython
+- pysam
+- numpy
+- dnaio
+- pytest (testing)
 
 ---
 
@@ -40,11 +42,19 @@ Users can even create fake spatial coordinates (X, Y) for general-purpose demult
 
 If you are using a virtual environment like Anaconda:
 
-```bash
+```console
 git clone https://github.com/your-repo/taggd.git
 cd taggd
 python setup.py build
 python setup.py install
+```
+
+or using pip
+
+```console
+git clone https://github.com/your-repo/taggd.git
+cd taggd
+pip install .
 ```
 
 ### Using `pip`
@@ -59,15 +69,15 @@ pip install taggd
 
 ## Building the Project
 
-If you are contributing or making changes to the code, you may need to rebuild the Cython extensions:
+If you are contributing, testing or making changes to the code, you may need to build or rebuild the Cython extensions:
 
-```bash
+```console
 python setup.py build_ext --inplace
 ```
 
 ## Testing the Project
 
-```bash
+```console
 pytest
 ```
 
@@ -79,8 +89,8 @@ pytest
 
 To see all available options, run:
 
-```bash
-taggd_demultiplex.py -h
+```console
+taggd_demultiplex -h
 ```
 
 ### Input Reference File Format
@@ -104,7 +114,7 @@ TGCATGCA 1 1
 
 #### Example
 
-```bash
+```console
 taggd_demultiplex   --k 6   --max-edit-distance 3   --overhang 2   --subprocesses 4   --seed randomseed   <barcodes.tsv>   <input_file>   <output_prefix>
 ```
 

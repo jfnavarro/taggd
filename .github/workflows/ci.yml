@@ -27,7 +27,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install cython pysam
+        pip install cython pysam numpy
         pip install .
 
     - name: Run tests
