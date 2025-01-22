@@ -14,9 +14,9 @@ with the barcode and properties like this:
 
 B0:Z:<barcode> B1:Z:<prop1> B2:Z:<prop3> ...
 
-Source:          https://github.com/SpatialTranscriptomicsResearch/taggd
+Source:          https://github.com/jfnavaro/taggd
 Python package:  https://pypi.python.org/pypi/taggd
-Contact:         joel.sjostrand@gmail.com;jc.fernandez.navarro@gmail.com
+Contact:         jc.fernandez.navarro@gmail.com
 """
 
 import os
@@ -208,7 +208,7 @@ def validate_arguments(options):
     Validate command-line arguments.
 
     Args:
-        options (argparse.Namespace): Parsed command-line arguments.
+        options: Parsed command-line arguments.
 
     Raises:
         ValueError: If any argument fails validation.
