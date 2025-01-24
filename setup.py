@@ -20,8 +20,8 @@ extensions = [
 setup(
     name="taggd",
     version="0.4.0",
-    author="Joel Sjostrand, Jose Fernandez",
-    author_email="joel.sjostrand@scilifelab.se, jc.fernandez.navarro@gmail.com",
+    author="Jose Fernandez",
+    author_email="jc.fernandez.navarro@gmail.com",
     license="BSD-3-Clause",
     description="Bioinformatics genetic barcode demultiplexing",
     long_description=open("README.md").read(),
@@ -35,7 +35,7 @@ setup(
         ],
     },
     setup_requires=["cython", "numpy"],
-    install_requires=["setuptools", "pysam", "numpy", "dnaio"],
+    install_requires=["setuptools", "pysam", "numpy", "dnaio", "tqdm", "types-tqdm"],
     python_requires=">=3.10",
     classifiers=[
         "Development Status :: 5 - Stable",

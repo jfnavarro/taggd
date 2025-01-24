@@ -94,8 +94,8 @@ cpdef list demultiplex_record(
         post_overhang,
         max_edit_distance
     )
-    cdef qual_hits = get_distances(read_barcode, candidates, metric_choice, max_edit_distance)
-    cdef top_hits = get_top_hits(qual_hits, ambiguity_factor)
+    cdef list qual_hits = get_distances(read_barcode, candidates, metric_choice, max_edit_distance)
+    cdef list top_hits = get_top_hits(qual_hits, ambiguity_factor)
 
     if not top_hits:
         # UNMATCHED

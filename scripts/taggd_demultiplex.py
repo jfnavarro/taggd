@@ -21,7 +21,7 @@ Contact:         jc.fernandez.navarro@gmail.com
 
 import os
 import time
-import multiprocessing as mp
+import multiprocessing
 import argparse
 from taggd.io.barcode_utils import read_barcode_file, estimate_min_edit_distance  # type: ignore
 from taggd.core.demultiplex import DemultipleReads
@@ -191,7 +191,7 @@ def parse_arguments(argv=None):
         "--chunk-size",
         type=int,
         help="The chunk size (number of reads) for parallel processing (default: %(default)d).",
-        default=10000,
+        default=100000,
         metavar="INT",
     )
     parser.add_argument(
@@ -335,9 +335,9 @@ def validate_arguments(options):
             "--no-unmatched-output, --no-results-output). At least one output must be enabled."
         )
 
-    if options.chunk_size < 100:
+    if options.chunk_size < 1000:
         raise ValueError(
-            "Chunk size (--chunk-size) must be 100 or greater to avoid excessive overhead."
+            "Chunk size (--chunk-size) must be 1000 or greater to avoid excessive overhead."
         )
 
 
@@ -370,7 +370,7 @@ def main(argv=None):
 
     # Subprocesses
     if options.subprocesses == 0:
-        options.subprocesses = mp.cpu_count() - 1
+        options.subprocesses = multiprocessing.cpu_count() - 1
 
     print(f"# Options: {str(options).split('Namespace')[-1]}")
     print(f"# Barcodes input file: {fn_bc}")
@@ -448,4 +448,5 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method("spawn", force=True)
     main()

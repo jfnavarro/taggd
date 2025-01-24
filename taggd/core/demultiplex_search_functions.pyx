@@ -40,7 +40,7 @@ cdef list get_candidates(
     # NOTE probably faster to keep kmer_offsets in memory as we will call
     #      this function several times with the same barcode but we get a penalty in memory use
     cdef object candidates = defaultdict(int)
-    cdef list kmers_offsets = get_kmers(read_barcode, k, False, slider_increment)
+    cdef list kmers_offsets = get_kmers(read_barcode, k, round_robin=False, slider_increment=slider_increment)
     cdef int penalty = 0
     cdef int min_penalty = 0
     cdef str kmer

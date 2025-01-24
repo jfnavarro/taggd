@@ -3,10 +3,11 @@ Main demultiplexing module to demultiplex reads in parallel.
 """
 from typing import Tuple, Any, List, Dict, Optional
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import queue
 import threading
 import random
+from tqdm import tqdm
 from taggd.core.statistics import Statistics
 from taggd.misc.kmer_utils import get_kmers_dicts  # type: ignore
 from taggd.core.demultiplex_sub_functions import demultiplex_record  # type: ignore
@@ -85,7 +86,13 @@ class DemultipleReads:
             for start, end in trim_sequences:
                 self.barcode_length += end - start
         # Create k-mer mappings with ALL kmers
-        self.kmer2seq = get_kmers_dicts(list(self.true_barcodes.keys()), self.k, False)
+        self.kmer2seq = get_kmers_dicts(
+            list(self.true_barcodes.keys()),
+            self.k,
+            round_robin=False,
+            slider_increment=1,
+        )
+        print(f"Obtained {len(self.kmer2seq)} k-mers from the barcodes.")
         # define metric choice
         if self.metric == "Subglobal":
             self.metric_choice = constants.SUBGLOBAL
@@ -104,28 +111,32 @@ class DemultipleReads:
             chunk: A chunk of file records.
         """
         for record in chunk:
-            matches = demultiplex_record(
-                record,
-                self.barcode_tag,
-                self.true_barcodes,
-                self.homopolymers,
-                self.start_position,
-                self.barcode_length,
-                self.trim_sequences,
-                self.pre_overhang,
-                self.post_overhang,
-                self.k,
-                self.kmer2seq,
-                self.metric_choice,
-                self.max_edit_distance,
-                self.ambiguity_factor,
-                self.slider_increment,
-                self.no_offset_speedup,
-                self.multiple_hits_keep_one,
-            )
-            # Iterate over all matches (only more than one if ambiguous)
-            for match in matches:
-                self.write_queue.put((match, record))
+            try:
+                matches = demultiplex_record(
+                    record,
+                    self.barcode_tag,
+                    self.true_barcodes,
+                    self.homopolymers,
+                    self.start_position,
+                    self.barcode_length,
+                    self.trim_sequences,
+                    self.pre_overhang,
+                    self.post_overhang,
+                    self.k,
+                    self.kmer2seq,
+                    self.metric_choice,
+                    self.max_edit_distance,
+                    self.ambiguity_factor,
+                    self.slider_increment,
+                    self.no_offset_speedup,
+                    self.multiple_hits_keep_one,
+                )
+                # Iterate over all matches (only more than one if ambiguous)
+                for match in matches:
+                    self.write_queue.put((match, record))
+            except Exception as e:
+                print(f"Error processing record {record.annotation}: {e}")
+                raise e
 
     def _writer_thread(self, writers: Dict[str, Any]) -> None:
         """
@@ -179,8 +190,8 @@ class DemultipleReads:
         Processes the input file in chunks and writes results to different files based on the output category.
         """
         start_time = time.time()
-
         random.seed(self.seed)
+        print(f"Using {self.subprocesses} threads and {self.chunk_size} as chunk size.")
 
         # Prepare writers for each output category
         writers = {}
@@ -206,6 +217,10 @@ class DemultipleReads:
             with ThreadPoolExecutor(max_workers=self.subprocesses) as executor:
                 futures = []
                 current_chunk = []
+                processed_records = 0
+                pbar = tqdm(
+                    desc="Processing records", unit="record", dynamic_ncols=True
+                )
 
                 # Read the file and divide it into chunks
                 for record in self.reader_writter.reader_open():
@@ -214,15 +229,24 @@ class DemultipleReads:
                         futures.append(
                             executor.submit(self._process_chunk, current_chunk)
                         )
+                        processed_records += len(current_chunk)
+                        pbar.update(len(current_chunk))
                         current_chunk = []
+                    # Process completed futures
+                    for future in as_completed(futures):
+                        future.result()
+                        futures.remove(future)
 
                 # Process any remaining records
                 if current_chunk:
                     futures.append(executor.submit(self._process_chunk, current_chunk))
+                    processed_records += len(current_chunk)
+                    pbar.update(len(current_chunk))
+                    for future in as_completed(futures):
+                        future.result()
 
-                # Ensure all tasks complete
-                for future in futures:
-                    future.result()
+                pbar.close()
+                print(f"Processed {processed_records} records.")
 
             # Send stop signal to writer thread
             self.write_queue.put(self.stop_signal)
@@ -230,6 +254,9 @@ class DemultipleReads:
         finally:
             # Close reader
             self.reader_writter.reader_close()
+            # Close the Queue
+            self.write_queue.put(self.stop_signal)
+            writer_thread.join()
             # Close all writers
             for writer in writers.values():
                 writer.close()
