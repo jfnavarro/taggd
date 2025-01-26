@@ -335,9 +335,9 @@ def validate_arguments(options):
             "--no-unmatched-output, --no-results-output). At least one output must be enabled."
         )
 
-    if options.chunk_size < 1000:
+    if options.chunk_size < 100:
         raise ValueError(
-            "Chunk size (--chunk-size) must be 1000 or greater to avoid excessive overhead."
+            "Chunk size (--chunk-size) must be 100 or greater to avoid excessive overhead."
         )
 
 

@@ -35,7 +35,16 @@ setup(
         ],
     },
     setup_requires=["cython", "numpy"],
-    install_requires=["setuptools", "pysam", "numpy", "dnaio", "tqdm", "types-tqdm"],
+    install_requires=[
+        "setuptools",
+        "pysam",
+        "numpy",
+        "dnaio",
+        "tqdm",
+        "types-tqdm",
+        "aiofiles",
+        "types-aiofiles",
+    ],
     python_requires=">=3.10",
     classifiers=[
         "Development Status :: 5 - Stable",

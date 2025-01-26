@@ -3,9 +3,8 @@ Main demultiplexing module to demultiplex reads in parallel.
 """
 from typing import Tuple, Any, List, Dict, Optional
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import queue
-import threading
+import asyncio
+import aiofiles
 import random
 from tqdm import tqdm
 from taggd.core.statistics import Statistics
@@ -76,8 +75,7 @@ class DemultipleReads:
         self.output_unmatched = output_unmatched
         self.output_results = output_results
         self.chunk_size = chunk_size
-        self.write_queue = queue.Queue()  # type: ignore
-        self.stop_signal = None  # Signal to stop the writer thread
+        self.stop_signal = None  # Unique stop signal
         self.stats = Statistics(self.max_edit_distance)
         # Adjust the barcode length and the overhang if
         # we want to trim away helpers from the barcode
@@ -103,13 +101,17 @@ class DemultipleReads:
         # Create the reader/writer
         self.reader_writter = ReadsReaderWriter(self.filename)
 
-    def _process_chunk(self, chunk: List[Any]) -> None:
+    def _process_chunk(self, chunk: List[Any]) -> List[Tuple[Any, Any]]:
         """
-        Processes a single chunk using the Cython function and adds results to the queue.
+        Processes a single chunk of records and returns the matches.
 
         Args:
             chunk: A chunk of file records.
+
+        Returns:
+            A list of tuples (match, record) to be added to the async queue.
         """
+        results = []  # type: ignore
         for record in chunk:
             try:
                 matches = demultiplex_record(
@@ -131,133 +133,199 @@ class DemultipleReads:
                     self.no_offset_speedup,
                     self.multiple_hits_keep_one,
                 )
-                # Iterate over all matches (only more than one if ambiguous)
-                for match in matches:
-                    self.write_queue.put((match, record))
+                # Collect results for the queue
+                results.extend((match, record) for match in matches)
             except Exception as e:
                 print(f"Error processing record {record.annotation}: {e}")
                 raise e
+        return results
 
-    def _writer_thread(self, writers: Dict[str, Any]) -> None:
+    async def _async_writer_results(self, queue: asyncio.Queue, file_path: str) -> None:
         """
-        A thread that writes results from the queue to appropriate files.
+        Asynchronously writes data (results) from a queue to a file (TSV).
+
+        Args:
+            queue: An asyncio.Queue containing data to write.
+            file_path: Path to the output file.
         """
-        while True:
-            item = self.write_queue.get()
-            if item == self.stop_signal:  # Stop signal
-                break
-            match, record = item
-            self.stats.total_reads += 1
-            # Write to results file.
-            if self.output_results is not None:
-                writers["output_results"].write(f"{str(match)}\n")
-            # No match.
-            if match.match_type == constants.UNMATCHED:
-                if self.output_unmatched is not None:
-                    writers["output_unmatched"].write(record.unwrap())
-                    self.stats.total_reads_wr += 1
-                self.stats.unmatched += 1
-                continue
-            # Append record with properties. B0:Z:Barcode, B1:Z:Prop1, B2:Z:prop3 ...
-            tags = []
-            bc = self.true_barcodes[match.barcode]
-            # To avoid duplicated B0 tag when input is BAM/SAM we set instead of add
-            tags.append(("B0:Z", match.barcode))
-            for j in range(len(bc.attributes)):  # type: ignore
-                tags.append((f"B{j+1}:Z", bc.attributes[j]))  # type: ignore
-            record.add_tags(tags)
-            # Write to output file.
-            if match.match_type == constants.MATCHED_PERFECTLY:
-                if self.output_matched is not None:
-                    writers["output_matched"].write(record.unwrap())
-                    self.stats.total_reads_wr += 1
-                self.stats.perfect_matches += 1
-                self.stats.edit_distance_counts[0] += 1
-            elif match.match_type == constants.MATCHED_UNAMBIGUOUSLY:
-                if self.output_matched is not None:
-                    writers["output_matched"].write(record.unwrap())
-                self.stats.imperfect_unambiguous_matches += 1
-                self.stats.edit_distance_counts[match.edit_distance] += 1
-            elif match.match_type == constants.MATCHED_AMBIGUOUSLY:
-                if self.output_ambiguous is not None:
-                    writers["output_ambiguous"].write(record.unwrap())
-                self.stats.imperfect_ambiguous_matches += 1
-            else:
-                raise ValueError(f"Invalid match type {match.match_type}")
+        async with aiofiles.open(file_path, mode="w") as writer:
+            while True:
+                item = await queue.get()
+                if item is self.stop_signal:
+                    break
+                await writer.write(item)
+
+    async def _async_writer_records(self, queue: asyncio.Queue, file_path: str) -> None:
+        """
+        Asynchronously writes data (records) from a queue to a file (BAM/SAM/FASTQ/FASTA).
+
+        Args:
+            queue: An asyncio.Queue containing data to write.
+            file_path: Path to the output file.
+        """
+        with self.reader_writter.get_writer(file_path) as writer:
+            while True:
+                item = await queue.get()
+                if item is self.stop_signal:
+                    break
+                writer.write(item)
+
+    async def _async_writer_manager(self) -> None:
+        """
+        Creates and manages multiple async writer tasks for each output file.
+        """
+        # Prepare writers for each output category
+        queues: Dict[str, asyncio.Queue] = {}
+        tasks = []
+        if self.output_results:
+            queues["output_results"] = asyncio.Queue(maxsize=1000)
+            tasks.append(
+                asyncio.create_task(
+                    self._async_writer_results(
+                        queues["output_results"], self.output_results
+                    )
+                )
+            )
+            # Add a header to the output results
+            await queues["output_results"].put(get_match_header() + "\n")
+        if self.output_unmatched:
+            queues["output_unmatched"] = asyncio.Queue(maxsize=1000)
+            tasks.append(
+                asyncio.create_task(
+                    self._async_writer_records(
+                        queues["output_unmatched"], self.output_unmatched
+                    )
+                )
+            )
+        if self.output_matched:
+            queues["output_matched"] = asyncio.Queue(maxsize=1000)
+            tasks.append(
+                asyncio.create_task(
+                    self._async_writer_records(
+                        queues["output_matched"], self.output_matched
+                    )
+                )
+            )
+        if self.output_ambiguous:
+            queues["output_ambiguous"] = asyncio.Queue(maxsize=1000)
+            tasks.append(
+                asyncio.create_task(
+                    self._async_writer_records(
+                        queues["output_ambiguous"], self.output_ambiguous
+                    )
+                )
+            )
+
+        # Writer loop
+        try:
+            while True:
+                item = await self.async_write_queue.get()
+                if item is self.stop_signal:
+                    # for queue in queues.values():
+                    #   await queue.put(self.stop_signal)
+                    break
+
+                match, record = item
+                self.stats.total_reads += 1
+
+                # Write match data to results file
+                if "output_results" in queues:
+                    await queues["output_results"].put(f"{str(match)}\n")
+
+                # Write unmatched records
+                if match.match_type == constants.UNMATCHED:
+                    self.stats.unmatched += 1
+                    if "output_unmatched" in queues:
+                        await queues["output_unmatched"].put(record.unwrap())
+                    continue
+
+                # Append record with properties. B0:Z:Barcode, B1:Z:Prop1, B2:Z:prop3 ...
+                tags = []
+                bc = self.true_barcodes[match.barcode]
+                # To avoid duplicated B0 tag when input is BAM/SAM we set instead of add
+                tags.append(("B0:Z", match.barcode))
+                for j in range(len(bc.attributes)):  # type: ignore
+                    tags.append((f"B{j+1}:Z", bc.attributes[j]))  # type: ignore
+                record.add_tags(tags)
+
+                # Write matched records
+                if match.match_type == constants.MATCHED_PERFECTLY:
+                    self.stats.perfect_matches += 1
+                    self.stats.edit_distance_counts[0] += 1
+                    if "output_matched" in queues:
+                        await queues["output_matched"].put(record.unwrap())
+
+                if match.match_type == constants.MATCHED_UNAMBIGUOUSLY:
+                    self.stats.imperfect_unambiguous_matches += 1
+                    self.stats.edit_distance_counts[match.edit_distance] += 1
+                    if "output_matched" in queues:
+                        await queues["output_matched"].put(record.unwrap())
+
+                # Write ambiguous records
+                if match.match_type == constants.MATCHED_AMBIGUOUSLY:
+                    self.stats.imperfect_ambiguous_matches += 1
+                    if "output_ambiguous" in queues:
+                        await queues["output_ambiguous"].put(record.unwrap())
+        finally:
+            # Ensure all queues receive the stop signal
+            for queue in queues.values():
+                await queue.put(self.stop_signal)
+            await asyncio.gather(*tasks)
 
     def run(self) -> None:
         """
-        Processes the input file in chunks and writes results to different files based on the output category.
+        Processes the input file in chunks and writes results asynchronously to output files.
         """
         start_time = time.time()
         random.seed(self.seed)
         print(f"Using {self.subprocesses} threads and {self.chunk_size} as chunk size.")
 
-        # Prepare writers for each output category
-        writers = {}
-        if self.output_results is not None:
-            writers["output_results"] = open(self.output_results, "w")
-            writers["output_results"].write(get_match_header() + "\n")
-        if self.output_unmatched:
-            writers["output_unmatched"] = self.reader_writter.get_writer(  # type: ignore
-                self.output_unmatched
-            )
-        if self.output_matched:
-            writers["output_matched"] = self.reader_writter.get_writer(  # type: ignore
-                self.output_matched
-            )
-        if self.output_ambiguous:
-            writers["output_ambiguous"] = self.reader_writter.get_writer(  # type: ignore
-                self.output_ambiguous
-            )
-        writer_thread = threading.Thread(target=self._writer_thread, args=(writers,))
-        writer_thread.start()
+        # Queue for async writing
+        self.async_write_queue: asyncio.Queue = asyncio.Queue(
+            maxsize=self.chunk_size * self.subprocesses
+        )
 
-        try:
-            with ThreadPoolExecutor(max_workers=self.subprocesses) as executor:
-                futures = []
+        async def main():
+            writer_task = asyncio.create_task(self._async_writer_manager())
+            processed_records = 0
+            pbar = tqdm(desc="Processing records", unit="record", dynamic_ncols=True)
+
+            try:
                 current_chunk = []
-                processed_records = 0
-                pbar = tqdm(
-                    desc="Processing records", unit="record", dynamic_ncols=True
-                )
-
-                # Read the file and divide it into chunks
+                # Read the input file and divide it into chunks
                 for record in self.reader_writter.reader_open():
                     current_chunk.append(record)
                     if len(current_chunk) == self.chunk_size:
-                        futures.append(
-                            executor.submit(self._process_chunk, current_chunk)
+                        # Process the chunk asynchronously in a thread
+                        results = await asyncio.to_thread(
+                            self._process_chunk, current_chunk
                         )
+                        # Put the matches in the queue
+                        for result in results:
+                            await self.async_write_queue.put(result)
                         processed_records += len(current_chunk)
                         pbar.update(len(current_chunk))
                         current_chunk = []
-                    # Process completed futures
-                    for future in as_completed(futures):
-                        future.result()
-                        futures.remove(future)
 
                 # Process any remaining records
                 if current_chunk:
-                    futures.append(executor.submit(self._process_chunk, current_chunk))
+                    results = await asyncio.to_thread(
+                        self._process_chunk, current_chunk
+                    )
+                    for result in results:
+                        await self.async_write_queue.put(result)
                     processed_records += len(current_chunk)
                     pbar.update(len(current_chunk))
-                    for future in as_completed(futures):
-                        future.result()
 
                 pbar.close()
                 print(f"Processed {processed_records} records.")
 
-            # Send stop signal to writer thread
-            self.write_queue.put(self.stop_signal)
-            writer_thread.join()
-        finally:
-            # Close reader
-            self.reader_writter.reader_close()
-            # Close the Queue
-            self.write_queue.put(self.stop_signal)
-            writer_thread.join()
-            # Close all writers
-            for writer in writers.values():
-                writer.close()
+                # Send stop signal to queue
+                await self.async_write_queue.put(self.stop_signal)
+                await writer_task
+            finally:
+                # Close reader
+                self.reader_writter.reader_close()
+
+        asyncio.run(main())
         self.stats.time = time.time() - start_time

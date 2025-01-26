@@ -40,15 +40,14 @@ class ReadsReaderWriter:
             self.file_type = self.FASTQ
         elif suffix == ".sam":
             self.file_type = self.SAM
-            sam_bam_mode = "r"
         elif suffix == ".bam":
             self.file_type = self.BAM
-            sam_bam_mode = "rb"
         else:
             raise ValueError("Unsupported reads file format!")
 
         # Read header for SAM/BAM files
-        if sam_bam_mode is not None:
+        if self.file_type in [self.BAM, self.SAM]:
+            sam_bam_mode = "r" if self.file_type == self.SAM else "rb"
             with pysam.AlignmentFile(self.infile_name, sam_bam_mode) as infile:  # type: ignore
                 self.infile_header = infile.header
 
@@ -63,14 +62,11 @@ class ReadsReaderWriter:
         """
         self.reader_close()
 
-        if self.file_type == self.FASTA:
-            self.infile = dnaio.FastaReader(self.infile_name)  # type: ignore
-        elif self.file_type == self.FASTQ:
-            self.infile = dnaio.FastqReader(self.infile_name)  # type: ignore
-        elif self.file_type == self.SAM:
-            self.infile = pysam.AlignmentFile(self.infile_name, "r")  # type: ignore
+        if self.file_type in [self.FASTA, self.FASTQ]:
+            self.infile = dnaio.open(self.infile_name)  # type: ignore
         else:
-            self.infile = pysam.AlignmentFile(self.infile_name, "rb")  # type: ignore
+            sam_bam_mode = "r" if self.file_type == self.SAM else "rb"
+            self.infile = pysam.AlignmentFile(self.infile_name, sam_bam_mode)  # type: ignore
 
         for orig in self.infile:  # type: ignore
             if self.file_type == self.FASTA:
@@ -112,7 +108,7 @@ class ReadsReaderWriter:
 
     def get_writer(
         self, outfile_name: str
-    ) -> Union[dnaio.FastaWriter, dnaio.FastqWriter, pysam.AlignmentFile]:
+    ) -> Union[dnaio.PairedEndReader, dnaio.SingleEndWriter, pysam.AlignmentFile]:
         """
         Returns a writer for the specified output file.
 
@@ -122,16 +118,8 @@ class ReadsReaderWriter:
         Returns:
             The writer object.
         """
-        if os.path.exists(outfile_name):
-            os.remove(outfile_name)
-
-        if self.file_type == self.FASTA:
-            return dnaio.FastaWriter(outfile_name)
-        elif self.file_type == self.FASTQ:
-            return dnaio.FastqWriter(outfile_name)
-        elif self.file_type == self.SAM:
-            return pysam.AlignmentFile(outfile_name, "wh", header=self.infile_header)
-        elif self.file_type == self.BAM:
-            return pysam.AlignmentFile(outfile_name, "wb", header=self.infile_header)
+        if self.file_type in [self.FASTA, self.FASTQ]:
+            return dnaio.open(outfile_name, mode="w")
         else:
-            raise ValueError("Unknown file format for writer")
+            flag = "wh" if self.file_type == self.SAM else "wb"
+            return pysam.AlignmentFile(outfile_name, flag, header=self.infile_header)  # type: ignore
