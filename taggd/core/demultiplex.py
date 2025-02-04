@@ -328,4 +328,9 @@ class DemultipleReads:
                 self.reader_writter.reader_close()
 
         asyncio.run(main())
+        self.stats.total_reads_wr = (
+            self.stats.perfect_matches
+            + self.stats.imperfect_unambiguous_matches
+            + self.stats.imperfect_ambiguous_matches
+        )
         self.stats.time = time.time() - start_time
