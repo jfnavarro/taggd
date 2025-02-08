@@ -61,7 +61,7 @@ pip install .
 
 Install directly from PyPI:
 
-```bash
+```console
 pip install taggd
 ```
 
@@ -129,10 +129,6 @@ TagGD generates the following output files:
 - `<output_prefix>_ambiguous.*`: Reads that matched multiple barcodes.
 - `<output_prefix>_results.tsv`: Summary statistics of the run.
 
----
-
-## Manual
-
 ### Options
 
 Run `taggd_demultiplex -h` to view all available options and their descriptions.
@@ -144,3 +140,4 @@ Run `taggd_demultiplex -h` to view all available options and their descriptions.
 For questions, bug reports, or contributions, please contact:
 
 - **Jose Fernandez Navarro**: <jc.fernandez.navarro@gmail.com>
+
