@@ -1,57 +1,149 @@
-[![Build Status](https://travis-ci.org/JoelSjostrand/taggd.svg?branch=master)](https://travis-ci.org/JoelSjostrand/taggd)
+# TagGD: Barcode Demultiplexing Utilities for Spatial Transcriptomics Data
 
-# TagGD barcode demultiplexing utilities for Spatial Transcriptomics data.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-310/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-311/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-312/)
+[![PyPI version](https://badge.fury.io/py/taggd.svg)](https://badge.fury.io/py/taggd)
+[![Build Status](https://github.com/jfnavarro/taggd/actions/workflows/dev.yml/badge.svg)](https://github.com/jfnavarro/taggd/actions/workflows/dev)
 
-This is the Python version, which is a generalized, optimized and more
-up-to-date version of the C++ demultiplexer named "findIndexes"
-which you can find here https://github.com/pelinakan/UBD.
+**TagGD** is a Python-based barcode demultiplexer for Spatial Transcriptomics data.
+It provides a generalized, optimized, and up-to-date version of the original C++ demultiplexer "findIndexes," available [here](https://github.com/pelinakan/UBD).
 
-See http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0057521
-for the peer-reviewed reference to the program.
+For the original peer-reviewed reference to the program, see [PLOS ONE](http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0057521).
 
-The main idea is to extract the cDNA barcodes
-from the input file (FASTQ, FASTA or BAM) and then
-try to find a match in a file with a list
-of reference barcodes using a kmer-based approach.
-All the reads that match will be outputted and the barcode
-and spatial information will be added to each record.
+## Overview
 
-TagGD requires a file containing the indexes(barcodes)
-to be used to demultiple. The file should look like this:
+The primary goal of TagGD is to extract cDNA barcodes from input files (FASTQ, FASTA, SAM, or BAM)
+and match them against a list of reference barcodes using a k-mer-based approach. Matched reads are
+output with barcode and spatial information added to each record.
 
+TagGD is versatile and can be used to demultiplex any type of index if a reference file is provided.
+Users can even create fake spatial coordinates (X, Y) for general-purpose demultiplexing tasks.
+
+## Key Features
+
+- Supports FASTQ, FASTA, SAM, and BAM formats.
+- Handles multiple indexes per read.
+- K-mer-based matching for efficient and accurate demultiplexing.
+- Outputs matched, unmatched, and ambiguous reads with annotated barcodes.
+- Multiple options and distance metrice.
+- Fast and memmory efficient.
+
+---
+
+## Requirements
+
+- python 3.10 or higher
+- cython
+- pysam
+- numpy
+- dnaio
+- pytest (testing)
+
+---
+
+## Installation
+
+### From Source
+
+If you are using a virtual environment like Anaconda:
+
+```console
+git clone https://github.com/your-repo/taggd.git
+cd taggd
+python setup.py build
+python setup.py install
+```
+
+or using pip
+
+```console
+git clone https://github.com/your-repo/taggd.git
+cd taggd
+pip install .
+```
+
+### Using `pip`
+
+Install directly from PyPI:
+
+```console
+pip install taggd
+```
+
+---
+
+## Building the Project
+
+If you are contributing, testing or making changes to the code, you may need to build or rebuild the Cython extensions:
+
+```console
+python setup.py build_ext --inplace
+```
+
+## Testing the Project
+
+```console
+pytest
+```
+
+---
+
+## Usage
+
+### Basic Command
+
+To see all available options, run:
+
+```console
+taggd_demultiplex -h
+```
+
+### Input Reference File Format
+
+The reference file should contain barcodes and optional spatial coordinates, formatted as follows:
+
+```tsv
 BARCODE X Y
+```
 
-TagGD could potentially be used to demultiplex any type of index
-if the refered file is provided (one culd just create fake X,Y coordinates).
+Example:
 
-TagGD allows to demultiplex reads that contain several indexes.
+```tsv
+ACGTACGT 0 0
+TGCATGCA 1 1
+```
 
-## Manual
+---
 
-See Wiki section
+### Example Commands
 
-## Requirements:
+#### Example
 
-TagGD requires PySam and Numpy.
+```console
+taggd_demultiplex   --k 6   --max-edit-distance 3   --overhang 2   --subprocesses 4   --seed randomseed   <barcodes.tsv>   <input_file>   <output_prefix>
+```
 
-## Installation:
+---
 
-(Assuming that you have a virtual environment
-installed such as Anaconda 2.7)
+## Output
 
-    cd <taggd demultiplexer root>
-    python setup.py build
-    python setup.py install
-    
-Alternatively, you can use PIP:
- 
-    pip install taggd  
+TagGD generates the following output files:
 
-## Run:
+- `<output_prefix>_matched.*`: Reads that matched reference barcodes.
+- `<output_prefix>_unmatched.*`: Reads that did not match any reference barcodes.
+- `<output_prefix>_ambiguous.*`: Reads that matched multiple barcodes.
+- `<output_prefix>_results.tsv`: Summary statistics of the run.
 
-    taggd_demultiplex.py -h
+### Options
 
+Run `taggd_demultiplex -h` to view all available options and their descriptions.
 
-## Contact: 
+---
 
-jose.fernandez.navarro@scilifelab.se.
+## Contact
+
+For questions, bug reports, or contributions, please contact:
+
+- **Jose Fernandez Navarro**: <jc.fernandez.navarro@gmail.com>
