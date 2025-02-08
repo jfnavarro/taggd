@@ -20,10 +20,10 @@ extensions = [
 setup(
     name="taggd",
     version="0.4.0",
-    author="Jose Fernandez",
+    author="Jose Fernandez Navarro",
     author_email="jc.fernandez.navarro@gmail.com",
-    license="BSD-3-Clause",
-    description="Bioinformatics genetic barcode demultiplexing",
+    license="MIT",
+    description="Bioinformatics genetic barcode demultiplexing (Spatial Transcriptomics)",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/jfnavarro/taggd",
@@ -47,11 +47,15 @@ setup(
     ],
     python_requires=">=3.10",
     classifiers=[
-        "Development Status :: 5 - Stable",
-        "Programming Language :: Python :: 3.10"
-        "Programming Language :: Python :: 3.11"
-        "Programming Language :: Python :: 3.12"
-        "License :: OSI Approved :: BSD License",
+        "Development Status :: 5 - Production/Stable",
+        "Environment :: Console",
+        "Programming Language :: Cython",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: MacOS",
+        "Operating System :: POSIX :: Linux",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
