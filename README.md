@@ -1,5 +1,12 @@
 # TagGD: Barcode Demultiplexing Utilities for Spatial Transcriptomics Data
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-310/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-311/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-312/)
+[![PyPI version](https://badge.fury.io/py/taggd.svg)](https://badge.fury.io/py/taggd)
+[![Build Status](https://github.com/jfnavarro/taggd/actions/workflows/dev.yml/badge.svg)](https://github.com/jfnavarro/taggd/actions/workflows/dev)
+
 **TagGD** is a Python-based barcode demultiplexer for Spatial Transcriptomics data.
 It provides a generalized, optimized, and up-to-date version of the original C++ demultiplexer "findIndexes," available [here](https://github.com/pelinakan/UBD).
 
@@ -140,4 +147,3 @@ Run `taggd_demultiplex -h` to view all available options and their descriptions.
 For questions, bug reports, or contributions, please contact:
 
 - **Jose Fernandez Navarro**: <jc.fernandez.navarro@gmail.com>
-

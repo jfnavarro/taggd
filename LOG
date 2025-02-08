@@ -41,5 +41,5 @@
         - Use Google docstrings and typing hints
         - Add github actions and pre-commit hooks
         - Update the building scripts and the documentation
-        - Add test for full coverage
+        - Add tests for full coverage
         - Update all dependencies and add support to modern Python
