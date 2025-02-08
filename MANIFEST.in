@@ -1,0 +1,4 @@
+include README.md
+include LICENSE
+include LOG
+recursive-include taggd *.pyx *.pxd

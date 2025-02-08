@@ -29,10 +29,17 @@
 0.2.7   - Added ambiguity range option.
 0.2.8   - Improved help messages.
 0.2.9   - Changed ambiguity range to factor.
-0.3.0   - Formatted code and added option to include one match when there are 
-	      multiple hits. Speed improvements and small refactoring.
-0.3.1 	- Added option to trim sequences in the barcodes
+0.3.0   - Formatted code and added option to include one match when there are
+          multiple hits. Speed improvements and small refactoring.
+0.3.1   - Added option to trim sequences in the barcodes
 0.3.2   - Added option to enable demultiplexing of BAM or SAM formatted input
           files using a barcode sequence from a tag field.
-0.3.3 	- Buf fixes relatesd to BAM input.
+0.3.3   - Buf fixes relatesd to BAM input.
 0.3.5   - Python 3 support
+0.4.0   - Refactor the whole codebase
+        - Add --chunk-size argument
+        - Use Google docstrings and typing hints
+        - Add github actions and pre-commit hooks
+        - Update the building scripts and the documentation
+        - Add test for full coverage
+        - Update all dependencies and add support to modern Python
